@@ -1,0 +1,8 @@
+# Everything in this repo runs in Linux containers, so files keep LF line endings on every OS.
+# Without this, Git on Windows checks out shell scripts with CRLF and they fail inside the containers.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
