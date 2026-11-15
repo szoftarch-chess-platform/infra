@@ -16,7 +16,7 @@ The specified load is small for any of the examined servers, so the decision did
 
 PostgreSQL 18 from the official `postgres:18-alpine` image, with one server instance in the docker compose of the `infra` repo.
 
-- **One database per service:** every service that uses SQL gets its own database and its own database user, and it can access only its own. Currently only the platform-service has one.
+- **One database per service:** every service that uses SQL gets its own database and its own database user, and it can access only its own. Currently only the platform-service has one. A script of the postgres container creates the database and the user when the data directory is initialized, and the password of the user comes from an environment variable.
 - **Schema:** every service manages the schema and the migrations of its own database.
 
 ## Rationale
@@ -44,7 +44,7 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 - There are no SQL queries across services. Such needs have to be served through APIs or events.
 - The location of the data directory changed in the 18 image. The volume has to be mounted at `/var/lib/postgresql` and not at the former `/var/lib/postgresql/data`, otherwise the data does not go into the mounted volume.
 - The port of the database is not published, so local debugging works through `docker compose exec` with `psql`.
-- To do: the `postgres` service goes into the compose of `infra`.
+- The script that creates the databases runs only on an empty data directory. When a service gets a database later, its database and user have to be created by hand on the installations that already exist.
 
 ## Sources
 

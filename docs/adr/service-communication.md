@@ -21,7 +21,7 @@ The two calls get two integration styles.
 - **Idempotent consumption:** the platform-service filters out repeated deliveries by the id of the event, and a message that cannot be processed goes to a dead-letter queue after the delivery limit.
 - **Message format:** JSON with a common envelope of `id` as a UUID, `type` with a version such as `game.finished.v1`, `source`, `time` and `data`. The schemas are written in AsyncAPI among the contracts of `infra`.
 - **Topology:** every service declares what it owns at startup. The sender declares the exchange, and the consumer declares its own queue and binding. The declarations are idempotent.
-- **Operation:** RabbitMQ runs as one instance in the compose of `infra`, and every service connects with its own user. Only the local development override file publishes the web management interface, and only on `127.0.0.1`.
+- **Operation:** RabbitMQ 4.4 runs as one instance in the compose of `infra` from the official `rabbitmq:4.4-management-alpine` image, and every service connects with its own user. Only the local development override file publishes the web management interface, and only on `127.0.0.1`. Redis 8.8 runs as one instance from the official `redis:8.8-alpine` image.
 
 ## Rationale
 
@@ -32,6 +32,8 @@ The two calls get two integration styles.
 - The platform-service does not have to open an internal HTTP endpoint, so it does not have to authenticate a caller that does not come through the gateway.
 - The outbox and the idempotent consumer cover the two ends of at-least-once delivery. The event is not lost, and a repeated delivery does not create a duplicate game.
 - Thanks to the game variant field, a new game mode can be introduced without changing the interfaces of the move request and of the events.
+- Redis is open source again since version 8, which is also available under AGPLv3. Version 7.4 has only source-available licenses.
+- The image tags follow the patch releases of one release line. Fixes arrive without a change, and moving to a new release line is a deliberate step.
 
 ## Rejected alternatives
 
@@ -47,7 +49,7 @@ The two calls get two integration styles.
 - Because of at-least-once delivery every consumer has to be idempotent, including later ones.
 - Extension: a new event comes with a new `type` and routing key. An incompatible change of a schema gets a new version in the type name.
 - Several engine instances need a load balancer of their own in front of them under the same service name, which is the server-side discovery pattern. The game-service does not change for that.
-- To do: RabbitMQ, the internal network of the engine-service and its OpenAPI contract go into the `infra` repo, the outbox, the sender and the engine call with its timeout and retry into the game-service, and the consumer and the storage of the games into the platform-service.
+- To do: the RabbitMQ users of the services and the OpenAPI contract of the engine-service go into the `infra` repo, the outbox, the sender and the engine call with its timeout and retry into the game-service, and the consumer and the storage of the games into the platform-service.
 
 ## Sources
 
@@ -57,6 +59,7 @@ The two calls get two integration styles.
 - RabbitMQ 4.4 release: https://www.rabbitmq.com/blog/2026/10/20/rabbitmq-4.4-release
 - Transactional outbox pattern: https://microservices.io/patterns/data/transactional-outbox
 - Redis persistence with AOF: https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/
+- Redis licenses: https://redis.io/legal/licenses/
 - AsyncAPI 3.0: https://www.asyncapi.com/docs/reference/specification/v3.0.0
 - Networking in Compose: https://docs.docker.com/compose/how-tos/networking/
 - Pattern: Server-side service discovery: https://microservices.io/patterns/server-side-discovery

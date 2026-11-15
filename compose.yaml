@@ -1,0 +1,145 @@
+# Base compose file of the platform. It runs the released images of the services.
+# compose.dev.yaml builds the services from the sibling folders instead.
+
+name: chess-platform
+
+x-healthcheck-timing: &healthcheck-timing
+  interval: 5s
+  timeout: 5s
+  retries: 12
+
+services:
+  # The only container that publishes a port to the host.
+  envoy:
+    image: envoyproxy/envoy:v1.40-latest
+    ports:
+      - "${GATEWAY_PORT:?set it in .env}:8443"
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - type: bind
+        source: ./secrets/tls
+        target: /etc/envoy/tls
+        read_only: true
+        bind:
+          create_host_path: false
+      # Only the public keys are mounted. The private key stays outside the gateway.
+      - type: bind
+        source: ./secrets/jwt/jwks.json
+        target: /etc/envoy/jwt/jwks.json
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      frontend:
+        condition: service_healthy
+      game-service:
+        condition: service_healthy
+      platform-service:
+        condition: service_started
+    healthcheck:
+      # The image has no curl or wget, so bash asks the admin interface directly.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9901 &&
+          printf 'GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q LIVE <&3
+      <<: *healthcheck-timing
+
+  frontend:
+    image: ghcr.io/szoftarch-chess-platform/frontend:${FRONTEND_TAG:?set it in .env}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      <<: *healthcheck-timing
+
+  # The image has no shell, so it has no health check here.
+  platform-service:
+    image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
+    environment:
+      ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${PLATFORM_DB_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  game-service:
+    image: ghcr.io/szoftarch-chess-platform/game-service:${GAME_SERVICE_TAG:?set it in .env}
+    environment:
+      PORT: 3001
+    # Node.js does not stop on SIGTERM as process 1, so an init process forwards it.
+    init: true
+    networks:
+      - default
+      - engine
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      engine-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/health"]
+      <<: *healthcheck-timing
+
+  # Reachable only from the game-service, on the internal network.
+  engine-service:
+    image: ghcr.io/szoftarch-chess-platform/engine-service:${ENGINE_SERVICE_TAG:?set it in .env}
+    environment:
+      PORT: 8000
+    # Python does not handle SIGTERM as process 1, so an init process forwards it.
+    init: true
+    networks:
+      - engine
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      <<: *healthcheck-timing
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?set it in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # The init scripts run on a server without TCP, so the check passes only when they are done.
+      test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "postgres"]
+      <<: *healthcheck-timing
+
+  redis:
+    image: redis:8.8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      <<: *healthcheck-timing
+
+  rabbitmq:
+    image: rabbitmq:4.4-management-alpine
+    # The node name contains the host name, and the data directory belongs to the node name.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+
+networks:
+  engine:
+    internal: true
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
