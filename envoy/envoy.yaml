@@ -1,0 +1,190 @@
+# Static configuration of the API gateway.
+# ADR-3 decides the routes, and ADR-4 decides the JWT validation, the identity headers
+# and the Origin check of the WebSocket routes.
+
+static_resources:
+  listeners:
+    - name: https
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8443
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                alpn_protocols: [h2, http/1.1]
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/tls/gateway.crt
+                    private_key:
+                      filename: /etc/envoy/tls/gateway.key
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: gateway
+                # The gateway is at the edge, so the client address is the address of the connection.
+                use_remote_address: true
+                normalize_path: true
+                merge_slashes: true
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                http_filters:
+                  # A script runs only on the routes that name it.
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      source_codes:
+                        # A browser sends the Origin header with every WebSocket handshake. A page of
+                        # another origin must not open a connection with the cookie of the user, so the
+                        # header has to name the address that the request was sent to.
+                        same-origin:
+                          inline_string: |
+                            function envoy_on_request(handle)
+                              local headers = handle:headers()
+                              local origin = headers:get("origin")
+                              local own = "https://" .. (headers:get(":authority") or "")
+                              if origin ~= nil and origin:lower() ~= own:lower() then
+                                handle:respond({[":status"] = "403"}, "")
+                              end
+                            end
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      providers:
+                        platform-service:
+                          issuer: platform-service
+                          audiences:
+                            - chess-platform
+                          require_expiration: true
+                          local_jwks:
+                            filename: /etc/envoy/jwt/jwks.json
+                          # Listing a cookie turns off the default locations, so the header is listed too.
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          from_cookies:
+                            - __Host-access-token
+                          # The filter removes these headers from every request, also on the routes
+                          # without a requirement, and sets them only from a valid token.
+                          claim_to_headers:
+                            - header_name: x-user-id
+                              claim_name: sub
+                            - header_name: x-user-name
+                              claim_name: preferred_username
+                      # A route asks for a token by naming this requirement.
+                      requirement_map:
+                        signed-in-user:
+                          provider_name: platform-service
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                route_config:
+                  name: gateway
+                  virtual_hosts:
+                    - name: chess-platform
+                      domains: ["*"]
+                      # The first matching route wins.
+                      routes:
+                        - match:
+                            path_separated_prefix: /api/auth
+                          route:
+                            cluster: platform-service
+
+                        - match:
+                            path_separated_prefix: /api
+                          route:
+                            cluster: platform-service
+                          typed_per_filter_config:
+                            envoy.filters.http.jwt_authn:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.PerRouteConfig
+                              requirement_name: signed-in-user
+
+                        # A WebSocket lives longer than a request, so the route timeout is off
+                        # and the idle timeout is longer than the default of 5 minutes.
+                        - match:
+                            path_separated_prefix: /ws/game
+                          route:
+                            cluster: game-service
+                            timeout: 0s
+                            idle_timeout: 3600s
+                            upgrade_configs:
+                              - upgrade_type: websocket
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin
+                            envoy.filters.http.jwt_authn:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.PerRouteConfig
+                              requirement_name: signed-in-user
+
+                        - match:
+                            path_separated_prefix: /ws/spectate
+                          route:
+                            cluster: game-service
+                            timeout: 0s
+                            idle_timeout: 3600s
+                            upgrade_configs:
+                              - upgrade_type: websocket
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin
+
+                        - match:
+                            prefix: /
+                          route:
+                            cluster: frontend
+
+  # STRICT_DNS resolves the service name of compose to every instance of the service.
+  clusters:
+    - name: frontend
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: frontend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: frontend
+                      port_value: 8080
+
+    - name: platform-service
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: platform-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: platform-service
+                      port_value: 8080
+
+    - name: game-service
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: game-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: game-service
+                      port_value: 3001
+
+# The admin interface listens only inside the container and is never published.
+admin:
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 9901

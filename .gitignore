@@ -1,0 +1,5 @@
+# Settings and passwords of the local machine, created by scripts/dev-setup.mjs
+.env
+
+# Keys and certificates, created by scripts/dev-setup.mjs
+secrets/

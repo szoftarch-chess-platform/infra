@@ -1,0 +1,19 @@
+# Local development override. It builds the services from the repos cloned into sibling folders.
+
+services:
+  frontend:
+    build: ../frontend
+
+  game-service:
+    build: ../game-service
+
+  engine-service:
+    build: ../engine-service
+
+  platform-service:
+    build: ../platform-service
+
+  # The web management interface, reachable only from this machine.
+  rabbitmq:
+    ports:
+      - "127.0.0.1:15672:15672"
