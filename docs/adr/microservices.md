@@ -1,6 +1,6 @@
 # ADR-1: Microservice architecture and technologies
 
-**Related:** F-4, NF-5, NF-6, NF-8, NF-9, X-1, X-2, X-3, X-4, X-5, X-6, X-7, [ADR-5](database.md), [ADR-6](service-communication.md)
+**Related:** F-4, NF-5, NF-6, NF-8, NF-9, X-1, X-2, X-3, X-4, X-5, X-6, X-7, [ADR-5](database.md), [ADR-6](service-communication.md), [ADR-9](chess-rules.md), [ADR-10](live-game.md), ES-ADR-2
 
 ## Context
 
@@ -25,7 +25,7 @@ Every component that the system runs, such as the gateway, the database and the 
 
 The game-service checks whether a move is legal, and it is the authority on the state of a game. The frontend does not decide on legality.
 
-The first version implements the core features. The extra features are not part of it, but the interfaces and the data model are shaped so that the system can be extended with them with few changes.
+The first version implements the core features and the chess clock of X-1. The other extra features are not part of it, but the interfaces and the data model are shaped so that the system can be extended with them with few changes.
 
 ## Rationale
 

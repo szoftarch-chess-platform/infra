@@ -1,0 +1,199 @@
+asyncapi: 3.1.0
+
+info:
+  title: Game events
+  version: 1.0.0
+  description: >-
+    The events that the game-service publishes to RabbitMQ. ADR-6 decides the exchange, the
+    envelope, the outbox and the consumption, and ADR-8 the content. Every consumer declares and
+    binds its own queue, such as `platform.game-finished` of the platform-service.
+
+
+    Every message is persistent, its `content_type` property is `application/json`, and its
+    `message_id` and `type` properties repeat the `id` and the `type` of the envelope.
+
+defaultContentType: application/json
+
+servers:
+  rabbitmq:
+    host: rabbitmq:5672
+    protocol: amqp
+    protocolVersion: 0.9.1
+    description: The broker in compose. Every service connects with its own user to the default virtual host.
+    security:
+      - $ref: '#/components/securitySchemes/serviceUser'
+
+channels:
+  gameFinished:
+    address: game.finished
+    title: Finished games
+    description: The routing key `game.finished` on the `game.events` exchange.
+    messages:
+      gameFinished:
+        $ref: '#/components/messages/gameFinished'
+    bindings:
+      amqp:
+        is: routingKey
+        exchange:
+          name: game.events
+          type: topic
+          durable: true
+          autoDelete: false
+          vhost: /
+        bindingVersion: 0.3.0
+
+operations:
+  publishGameFinished:
+    action: send
+    title: Publish a finished game
+    summary: >-
+      The game-service publishes every finished game once from its outbox, including the games
+      against the bot and the aborted games.
+    channel:
+      $ref: '#/channels/gameFinished'
+    messages:
+      - $ref: '#/channels/gameFinished/messages/gameFinished'
+    bindings:
+      amqp:
+        deliveryMode: 2
+        mandatory: true
+        bindingVersion: 0.3.0
+
+components:
+  securitySchemes:
+    serviceUser:
+      type: userPassword
+      description: The RabbitMQ user of the service, as ADR-6 decides.
+
+  messages:
+    gameFinished:
+      name: game.finished.v1
+      title: A game has finished
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/GameFinishedEvent'
+      bindings:
+        amqp:
+          messageType: game.finished.v1
+          bindingVersion: 0.3.0
+      examples:
+        - name: whiteWonByCheckmate
+          summary: A user won against another user with a checkmate.
+          payload:
+            id: 0193c2c0-1a2b-7c3d-8e4f-5a6b7c8d9e0f
+            type: game.finished.v1
+            source: game-service
+            time: '2026-11-20T14:03:12.345Z'
+            data:
+              gameId: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+              variant: standard
+              white:
+                kind: user
+                userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                name: alice
+              black:
+                kind: user
+                userId: 0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b
+                name: bob
+              result: whiteWon
+              reason: checkmate
+              moves:
+                - e2e4
+                - e7e5
+                - d1h5
+                - b8c6
+                - f1c4
+                - g8f6
+                - h5f7
+              timeControl:
+                initialMs: 600000
+              startedAt: '2026-11-20T14:01:40.120Z'
+              endedAt: '2026-11-20T14:03:12.345Z'
+        - name: botGameResigned
+          summary: A user resigned against the bot.
+          payload:
+            id: 0193c2d1-2b3c-7d4e-9f5a-6b7c8d9e0f1a
+            type: game.finished.v1
+            source: game-service
+            time: '2026-11-20T15:10:05.000Z'
+            data:
+              gameId: 0193c2cf-3c4d-7e5f-8a6b-7c8d9e0f1a2b
+              variant: standard
+              white:
+                kind: bot
+                name: Stockfish bot
+              black:
+                kind: user
+                userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                name: alice
+              result: whiteWon
+              reason: resignation
+              moves:
+                - e2e4
+                - c7c5
+              timeControl:
+                initialMs: 600000
+              startedAt: '2026-11-20T15:09:30.000Z'
+              endedAt: '2026-11-20T15:10:05.000Z'
+
+  schemas:
+    GameFinishedEvent:
+      type: object
+      description: The envelope of ADR-6 with a finished game as its data.
+      required:
+        - id
+        - type
+        - source
+        - time
+        - data
+      properties:
+        id:
+          $ref: './shared-schemas.yaml#/Uuid'
+        type:
+          type: string
+          const: game.finished.v1
+        source:
+          type: string
+          const: game-service
+        time:
+          $ref: './shared-schemas.yaml#/Timestamp'
+        data:
+          $ref: '#/components/schemas/FinishedGame'
+
+    FinishedGame:
+      type: object
+      required:
+        - gameId
+        - variant
+        - white
+        - black
+        - result
+        - reason
+        - moves
+        - timeControl
+        - startedAt
+        - endedAt
+      properties:
+        gameId:
+          $ref: './shared-schemas.yaml#/Uuid'
+        variant:
+          $ref: './shared-schemas.yaml#/Variant'
+        white:
+          $ref: './shared-schemas.yaml#/Player'
+        black:
+          $ref: './shared-schemas.yaml#/Player'
+        result:
+          $ref: './shared-schemas.yaml#/GameResult'
+        reason:
+          $ref: './shared-schemas.yaml#/GameEndReason'
+        moves:
+          type: array
+          description: Every move of the game in order. It is empty if the game ended before the first move.
+          items:
+            $ref: './shared-schemas.yaml#/UciMove'
+        timeControl:
+          $ref: './shared-schemas.yaml#/TimeControl'
+        startedAt:
+          $ref: './shared-schemas.yaml#/Timestamp'
+        endedAt:
+          $ref: './shared-schemas.yaml#/Timestamp'

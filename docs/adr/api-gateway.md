@@ -1,6 +1,6 @@
 # ADR-3: Envoy as the API gateway
 
-**Related:** F-6, NF-1, NF-4, NF-5, NF-6, NF-9, X-7, [ADR-1](microservices.md), [ADR-2](polyrepo.md), [ADR-4](authentication.md), [ADR-6](service-communication.md)
+**Related:** F-6, NF-1, NF-4, NF-5, NF-6, NF-9, X-7, [ADR-1](microservices.md), [ADR-2](polyrepo.md), [ADR-4](authentication.md), [ADR-6](service-communication.md), [ADR-10](live-game.md)
 
 ## Context
 
@@ -15,7 +15,7 @@ The browser has to reach the SPA, the REST API of the platform-service and the W
 
 ## Decision
 
-Envoy Proxy 1.40 with static YAML configuration in the `infra` repo, run from the official `envoyproxy/envoy:v1.40-latest` image. Only the gateway publishes a port to the host. It listens for HTTPS only, and the host port comes from the `GATEWAY_PORT` variable of compose. Locally the system is at `https://localhost:8443`.
+Envoy Proxy 1.40 with static YAML configuration in the `infra` repo, run from the official `envoyproxy/envoy:v1.40-latest` image. In the base compose file only the gateway publishes a port to the host. It listens for HTTPS only, and the host port comes from the `GATEWAY_PORT` variable of compose. Locally the system is at `https://localhost:8443`.
 
 | Path | Target | JWT |
 |---|---|---|
@@ -25,7 +25,7 @@ Envoy Proxy 1.40 with static YAML configuration in the `infra` repo, run from th
 | `/ws/game` | game-service | required, from the cookie |
 | `/ws/spectate` | game-service | not needed, the game-service checks the token of the link |
 
-The game-service gets no REST route. Every operation of a live game, which means pairing, starting an AI game, a move, resigning and fetching the position after a reconnect, is a Socket.IO event on `/ws/game`, and the operations that need an answer use acknowledgements. So `/api/*` belongs entirely to the platform-service, including the endpoints of the game history. The two WebSocket routes are two separate Socket.IO paths (`path`) in the game-service, because the gateway decides about the JWT by route, and the namespace of Socket.IO does not show in the URL.
+The game-service gets no REST route. Every operation of a live game, which means joining and leaving the queue, starting a game against the bot, a move, resigning and fetching the state after a reconnect, is a Socket.IO event on `/ws/game`, and the operations that need an answer use acknowledgements. So `/api/*` belongs entirely to the platform-service, including the endpoints of the game history. The two WebSocket routes are two separate Socket.IO paths (`path`) in the game-service, because the gateway decides about the JWT by route, and the namespace of Socket.IO does not show in the URL.
 
 The game-service uses the Redis adapter of Socket.IO, which forwards the events between its instances. So the gateway can balance the connections between several game-service instances without stickiness.
 

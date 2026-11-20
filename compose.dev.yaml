@@ -1,4 +1,5 @@
-# Local development override. It builds the services from the repos cloned into sibling folders.
+# Local development override. It builds the services from the repos cloned into sibling folders,
+# and it publishes the ports that a service running on the host needs, reachable only from this machine.
 
 services:
   frontend:
@@ -13,7 +14,13 @@ services:
   platform-service:
     build: ../platform-service
 
-  # The web management interface, reachable only from this machine.
+  # Redis for a game-service that runs on the host.
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  # AMQP for the services that run on the host, and the web management interface.
   rabbitmq:
     ports:
+      - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
