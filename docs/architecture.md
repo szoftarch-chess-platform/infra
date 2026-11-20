@@ -92,7 +92,7 @@ sequenceDiagram
     G-->>B: computer move
 ```
 
-[ADR-3](adr/api-gateway.md) decides the connection and [ADR-6](adr/service-communication.md) the request for the computer move. Once the connection is open, the events travel on it through Envoy. Against a person, the game-service sends the move to the connection of the opponent instead.
+[ADR-3](adr/api-gateway.md) decides the connection, [ADR-6](adr/service-communication.md) the request for the computer move and [ADR-10](adr/live-game.md) which connections get the moves. Once the connection is open, the events travel on it through Envoy. Against a person, the game-service sends the move to every connection of the opponent instead.
 
 ### Handover of a finished game
 

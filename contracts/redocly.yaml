@@ -1,0 +1,22 @@
+# Configuration of Redocly CLI, which lints the contracts as ADR-7 decides.
+
+extends:
+  - recommended
+
+rules:
+  # The repos have no license yet.
+  info-license: off
+  # The servers name the local addresses of compose and the gateway on purpose.
+  no-server-example.com: off
+  # Signing out has no client error, because it succeeds without a valid refresh token too.
+  operation-4xx-response: off
+
+apis:
+  platform-service:
+    root: platform-service.openapi.yaml
+  engine-service:
+    root: engine-service.openapi.yaml
+  game-service:
+    root: game-service.asyncapi.yaml
+  game-events:
+    root: game-events.asyncapi.yaml

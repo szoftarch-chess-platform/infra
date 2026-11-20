@@ -22,7 +22,7 @@ Every piece of information is written down in one place only, and other document
 
 - A README gives instructions without reasons. The reasons are in the ADRs.
 - A diagram shows only what the ADRs decided, and its caption names those ADRs.
-- Inside a repo, documents refer to each other with relative links. Between repos only IDs are used, such as ADR-4, PS-ADR-2 or F-1, because a relative link into another repo does not work on GitHub.
+- Inside a repo, documents refer to each other with relative links. Between repos only IDs and the file names of the contracts are used, such as ADR-4, PS-ADR-2, F-1 or `game-events.asyncapi.yaml`, because a relative link into another repo does not work on GitHub.
 - If a document contradicts an ADR, the document is fixed. If an ADR contradicts the specification, the team decides.
 
 ## Claude Code

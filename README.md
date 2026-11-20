@@ -61,11 +61,28 @@ Build the images of the services from the sibling folders:
 ```bash
 docker compose build
 ```
-To build only the service that you work on, name it, as in `docker compose build game-service`. To use the released image of a service, set its tag in `.env` to the released version.
+To build only the service that you work on, name it, for example:
+```bash
+docker compose build game-service
+```
+To use the released image of a service, set its tag in `.env` to the released version.
 
 Start everything and wait until it is healthy:
 ```bash
 docker compose up -d --wait
+```
+
+The development override publishes these ports, which only the local machine reaches:
+
+| Address | Service |
+|---|---|
+| `127.0.0.1:6379` | Redis |
+| `127.0.0.1:5672` | AMQP of RabbitMQ |
+| http://127.0.0.1:15672 | web management interface of RabbitMQ, with the user `admin` and the password `RABBITMQ_ADMIN_PASSWORD` of `.env` |
+
+To run a service on the host, for example with the hot reload of its dev server, start only the containers that it needs. The platform-service needs RabbitMQ, and the game-service needs Redis and RabbitMQ. Starting only the Redis and the RabbitMQ looks like this:
+```bash
+docker compose up -d --wait redis rabbitmq
 ```
 
 Check the paths through the gateway:
@@ -74,10 +91,6 @@ node scripts/smoke-test.mjs
 ```
 
 The system runs at https://localhost:8443.
-
-The web management interface of RabbitMQ is at http://127.0.0.1:15672.
-User: `admin`
-Password: `RABBITMQ_ADMIN_PASSWORD` in `.env`.
 
 Stop the containers keeping the data:
 ```bash
@@ -118,6 +131,11 @@ docker compose run --rm --no-deps envoy --mode validate -c /etc/envoy/envoy.yaml
 
 In Git Bash start the second command with `MSYS_NO_PATHCONV=1`, otherwise Git Bash rewrites the path of the configuration.
 
+Check the contracts in `contracts/`:
+```bash
+npx --yes @redocly/cli@2.82.0 lint --config contracts/redocly.yaml
+```
+
 ### Trusting the certificate
 
 The browser warns about the certificate of the gateway until the development CA in `secrets/tls/ca.crt` is trusted. Trust it once, and again when you create a new one.
@@ -140,8 +158,9 @@ On Linux import `secrets/tls/ca.crt` as an authority in the certificate settings
 ```
 infra/
 ├── compose.yaml              # base compose file with the released images
-├── compose.dev.yaml          # override that builds the services from the sibling folders
+├── compose.dev.yaml          # override that builds the services from the sibling folders and publishes the ports for development
 ├── .env.example              # variables of the compose files
+├── contracts/                # contracts between the services and the configuration of their linter
 ├── envoy/
 │   └── envoy.yaml            # configuration of the gateway
 ├── postgres/

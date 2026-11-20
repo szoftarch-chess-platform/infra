@@ -22,7 +22,7 @@ An architecture decision record, ADR for short, records one decision with its co
 - Only decisions that have been made go into an ADR, proposals do not.
 - An ADR is not append-only. If a decision changes, the ADR is rewritten in place, and everything the change affects is updated with it, so that no earlier version stays in the docs. Git keeps the history. The other repos refer to a system ADR only by its ID, so search them for it, for example from the infra folder with `grep -rn "ADR-4" ../frontend ../game-service ../engine-service ../platform-service --include=*.md`.
 - The IDs never change. A new decision gets the next number, and the number of a deleted decision is not used again.
-- An ADR refers to other decisions and to the items of the specification only in its **Related** line, in the way that [conventions.md](conventions.md) describes.
+- An ADR lists the other decisions and the items of the specification that it relates to in its **Related** line, in the way that [conventions.md](conventions.md) describes. Its text may name them by their IDs, such as ADR-6 or NF-1, without links, and every ID that the text names is in the Related line too.
 - Open questions belong to the ADR that they concern. A question that no ADR covers yet goes into the `docs/README.md` of the repo. When an open question is decided, the question is deleted, and the decision is written into the matching ADR or into a new one.
 - A new decision uses the template below. Sections that are not relevant can be left out.
 

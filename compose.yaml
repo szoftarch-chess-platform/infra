@@ -9,7 +9,7 @@ x-healthcheck-timing: &healthcheck-timing
   retries: 12
 
 services:
-  # The only container that publishes a port to the host.
+  # The only container with a port on the host in this file. compose.dev.yaml adds the ports for development.
   envoy:
     image: envoyproxy/envoy:v1.40-latest
     ports:

@@ -1,0 +1,141 @@
+# JSON Schemas that several contracts use. ADR-8 decides the conventions behind them.
+#
+# The schemas use only the keywords that JSON Schema Draft 07 and 2020-12 have in common,
+# because the AsyncAPI schemas build on the first and OpenAPI 3.1 on the second.
+# A $ref has no sibling keywords for the same reason.
+
+Uuid:
+  type: string
+  format: uuid
+  description: A UUID in lowercase canonical form.
+  examples:
+    - 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+
+Timestamp:
+  type: string
+  format: date-time
+  description: An RFC 3339 timestamp. The writer sends it in UTC, and the reader accepts any offset.
+  examples:
+    - '2026-11-20T14:03:12.345Z'
+
+Fen:
+  type: string
+  minLength: 1
+  description: A position in Forsyth-Edwards Notation with all six fields.
+  examples:
+    - rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1
+
+UciMove:
+  type: string
+  pattern: '^[a-h][1-8][a-h][1-8][qrbn]?$'
+  description: >-
+    A move in UCI notation, which is the start square and the target square. A promotion adds
+    the new piece in lowercase, and castling is written as the move of the king.
+  examples:
+    - e2e4
+    - e7e8q
+    - e1g1
+
+Color:
+  type: string
+  enum:
+    - white
+    - black
+
+Variant:
+  type: string
+  description: The game variant. The first version has standard chess only.
+  enum:
+    - standard
+
+Player:
+  description: >-
+    A player of a game. A user plays under the user name, and the computer opponent is the bot.
+  oneOf:
+    - $ref: '#/UserPlayer'
+    - $ref: '#/BotPlayer'
+
+UserPlayer:
+  type: object
+  required:
+    - kind
+    - userId
+    - name
+  properties:
+    kind:
+      type: string
+      const: user
+    userId:
+      $ref: '#/Uuid'
+    name:
+      type: string
+      description: The user name.
+  examples:
+    - kind: user
+      userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+      name: alice
+
+BotPlayer:
+  type: object
+  required:
+    - kind
+    - name
+  properties:
+    kind:
+      type: string
+      const: bot
+    name:
+      type: string
+      const: Stockfish bot
+  examples:
+    - kind: bot
+      name: Stockfish bot
+
+GameResult:
+  type: string
+  description: The result of a finished game. An aborted game has no winner.
+  enum:
+    - whiteWon
+    - blackWon
+    - draw
+    - aborted
+
+GameEndReason:
+  type: string
+  description: Why the game ended. ADR-10 decides when each reason applies.
+  enum:
+    - checkmate
+    - resignation
+    - timeout
+    - stalemate
+    - threefoldRepetition
+    - fiftyMoveRule
+    - insufficientMaterial
+    - engineFailure
+
+TimeControl:
+  type: object
+  required:
+    - initialMs
+  properties:
+    initialMs:
+      type: integer
+      minimum: 1
+      description: The time of each user for the whole game in milliseconds.
+  examples:
+    - initialMs: 600000
+
+ProblemDetails:
+  type: object
+  description: An error response of RFC 9457.
+  properties:
+    type:
+      type: string
+    title:
+      type: string
+    status:
+      type: integer
+    detail:
+      type: string
+    instance:
+      type: string

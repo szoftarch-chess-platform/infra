@@ -1,6 +1,6 @@
 # ADR-5: PostgreSQL for long-term storage
 
-**Related:** F-1, F-6, NF-1, NF-3, NF-6, NF-9, X-2, X-4, X-6, [ADR-1](microservices.md), [ADR-2](polyrepo.md), [ADR-3](api-gateway.md), [ADR-6](service-communication.md)
+**Related:** F-1, F-6, NF-1, NF-3, NF-6, NF-9, X-2, X-4, X-6, [ADR-1](microservices.md), [ADR-2](polyrepo.md), [ADR-3](api-gateway.md), [ADR-6](service-communication.md), PS-ADR-7
 
 ## Context
 
@@ -18,6 +18,7 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 
 - **One database per service:** every service that uses SQL gets its own database and its own database user, and it can access only its own. Currently only the platform-service has one. A script of the postgres container creates the database and the user when the data directory is initialized, and the password of the user comes from an environment variable.
 - **Schema:** every service manages the schema and the migrations of its own database.
+- **Migrations:** the image of the service contains its migrations, and compose runs them in a one-shot container of the same image before the service starts.
 
 ## Rationale
 
@@ -29,6 +30,7 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 - 18 is the latest stable major version, and it gets fixes until 14 November 2030. The stable release of 19 is expected on 19 November 2026, and the first release of a new major version is too fresh to build on.
 - It is widely used. In the Stack Overflow survey of 2025 it is the most used database with 55.6%, so there is plenty of documentation and examples.
 - One database for each service is the database per service pattern of microservices, which keeps the data of a service private to it.
+- Microsoft advises to apply EF Core migrations as a step of the deployment rather than from the entry point of every replica. In a one-shot container they run once even with several instances of the service, and the service itself still starts when the database is down.
 
 ## Rejected alternatives
 
@@ -44,6 +46,7 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 - There are no SQL queries across services. Such needs have to be served through APIs or events.
 - The location of the data directory changed in the 18 image. The volume has to be mounted at `/var/lib/postgresql` and not at the former `/var/lib/postgresql/data`, otherwise the data does not go into the mounted volume.
 - The port of the database is not published, so local debugging works through `docker compose exec` with `psql`.
+- Every service with a database has a one-shot migration container in compose, and the service waits until it has finished successfully.
 - The script that creates the databases runs only on an empty data directory. When a service gets a database later, its database and user have to be created by hand on the installations that already exist.
 
 ## Sources
@@ -56,6 +59,7 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 - `pg_trgm`: https://www.postgresql.org/docs/current/pgtrgm.html
 - Stack Overflow Developer Survey 2025, databases: https://survey.stackoverflow.co/2025/technology
 - Database per service pattern: https://microservices.io/patterns/data/database-per-service
+- Applying EF Core migrations: https://learn.microsoft.com/ef/core/managing-schemas/migrations/applying
 - SQL Server 2025 editions and limits: https://learn.microsoft.com/sql/sql-server/editions-and-components-of-sql-server-2025
 - SQL Server container prerequisites: https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker
 - Releases of the Pomelo provider: https://github.com/PomeloFoundation/Pomelo.EntityFrameworkCore.MySql/releases
