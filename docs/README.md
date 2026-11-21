@@ -46,9 +46,8 @@ The contracts between the services, which [ADR-7](adr/contracts.md) and [ADR-8](
 
 The services stop at startup without a required setting, so the settings below go into compose before the services start to read them.
 
-- Create the RabbitMQ users of the game-service and the platform-service with the permissions of ADR-6, answering its open question on the passwords, and pass `RABBITMQ_URL`, `REDIS_URL` and `ENGINE_URL` to the game-service and `ConnectionStrings__RabbitMq` to the platform-service.
+- Create the RabbitMQ users of the game-service and the platform-service with the permissions of ADR-6, answering its open question on the passwords, and pass `RABBITMQ_URL` and `ENGINE_URL` to the game-service and `ConnectionStrings__RabbitMq` to the platform-service.
 - Mount the private key of the access tokens into the platform-service, and set `Jwt__SigningKeyPath` (ADR-4).
-- Let `scripts/dev-setup.mjs` add the variables of `.env.example` that an existing `.env` lacks, with random values for the new passwords, so the existing setups get the new passwords without losing their data.
 - Lint the contracts in a CI workflow for every pull request that changes `contracts/` (ADR-7).
 - Describe in the README how to send a test event with `rabbitmqadmin`, including the declaration of the `game.events` exchange when the game-service has not declared it yet (ADR-7).
 - Answer the open question of ADR-3 on the size of the rate limit, and add the rate limit of the sign-in to the gateway.

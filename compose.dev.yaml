@@ -8,11 +8,23 @@ services:
   game-service:
     build: ../game-service
 
+  # The engine for a game-service that runs on the host. A port can be published only
+  # from a network that is not internal, so the engine joins one that no other container uses.
   engine-service:
     build: ../engine-service
+    networks:
+      - engine
+      - engine-host
+    ports:
+      - "127.0.0.1:8000:8000"
 
   platform-service:
     build: ../platform-service
+
+  # The database for a platform-service that runs on the host, and for database tools.
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
 
   # Redis for a game-service that runs on the host.
   redis:
@@ -24,3 +36,6 @@ services:
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
+
+networks:
+  engine-host:

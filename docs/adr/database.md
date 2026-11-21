@@ -16,9 +16,10 @@ The specified load is small for any of the examined servers, so the decision did
 
 PostgreSQL 18 from the official `postgres:18-alpine` image, with one server instance in the docker compose of the `infra` repo.
 
-- **One database per service:** every service that uses SQL gets its own database and its own database user, and it can access only its own. Currently only the platform-service has one. A script of the postgres container creates the database and the user when the data directory is initialized, and the password of the user comes from an environment variable.
+- **One database per service:** every service that uses SQL gets its own database and its own database user, and it can access only its own. Currently only the platform-service has one. A script of the postgres container creates the database and the user when the data directory is initialized, and the password of the user comes from an environment variable. Only the services with a database share the network of the server, as ADR-6 decides.
 - **Schema:** every service manages the schema and the migrations of its own database.
 - **Migrations:** the image of the service contains its migrations, and compose runs them in a one-shot container of the same image before the service starts.
+- **Local development:** only the local development override file publishes the port of the database, on `127.0.0.1:5432`. A service under development runs on the host against it with its own database user, as ADR-6 describes for the other ports, and database tools connect to it the same way.
 
 ## Rationale
 
@@ -31,6 +32,7 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 - It is widely used. In the Stack Overflow survey of 2025 it is the most used database with 55.6%, so there is plenty of documentation and examples.
 - One database for each service is the database per service pattern of microservices, which keeps the data of a service private to it.
 - Microsoft advises to apply EF Core migrations as a step of the deployment rather than from the entry point of every replica. In a one-shot container they run once even with several instances of the service, and the service itself still starts when the database is down.
+- With the published port a service on the host uses the same server, database and user as in compose, and a graphical tool shows the schema and the data more easily than `psql`. On `127.0.0.1` only the same machine reaches the port.
 
 ## Rejected alternatives
 
@@ -39,13 +41,15 @@ PostgreSQL 18 from the official `postgres:18-alpine` image, with one server inst
 - **CockroachDB, YugabyteDB:** distributed SQL with horizontal scaling, which the specified load does not justify, and they are harder to operate. CockroachDB has not been open source since November 2024.
 - **SQLite:** it is not a server and allows only one writer at a time, so several platform-service instances cannot share it.
 - **MongoDB:** a finished game could be stored well as a document too, but the long-term data goes into an SQL database, ASP.NET Core Identity uses a relational model, and the license of the server, SSPL, is not open source according to the OSI. The move list can be stored in a JSON column in SQL as well.
+- **Access only through `docker compose exec` with `psql`:** no port is published, but neither a service on the host nor a database tool can connect.
+- **Own PostgreSQL container in the README of the service:** no change in `infra`, but the database would not have the user of compose, the version of the image would be written in two places, and its port would collide with the one of compose.
 
 ## Consequences
 
 - Only one server instance has to be operated, but it is a common point of failure for every service that uses SQL.
 - There are no SQL queries across services. Such needs have to be served through APIs or events.
 - The location of the data directory changed in the 18 image. The volume has to be mounted at `/var/lib/postgresql` and not at the former `/var/lib/postgresql/data`, otherwise the data does not go into the mounted volume.
-- The port of the database is not published, so local debugging works through `docker compose exec` with `psql`.
+- The port 5432 has to be free on the machine of a developer, so a PostgreSQL installed on the host has to be stopped or moved to another port.
 - Every service with a database has a one-shot migration container in compose, and the service waits until it has finished successfully.
 - The script that creates the databases runs only on an empty data directory. When a service gets a database later, its database and user have to be created by hand on the installations that already exist.
 

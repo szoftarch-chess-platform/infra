@@ -1,0 +1,13 @@
+# Override for a game-service that runs on the host instead of in its container.
+# The gateway reaches it on the host under the name of the service, so envoy.yaml does not change.
+
+services:
+  envoy:
+    extra_hosts:
+      - "game-service:host-gateway"
+    depends_on:
+      game-service:
+        required: false
+
+  game-service:
+    scale: 0

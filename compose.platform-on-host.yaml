@@ -1,0 +1,13 @@
+# Override for a platform-service that runs on the host instead of in its container.
+# The gateway reaches it on the host under the name of the service, so envoy.yaml does not change.
+
+services:
+  envoy:
+    extra_hosts:
+      - "platform-service:host-gateway"
+    depends_on:
+      platform-service:
+        required: false
+
+  platform-service:
+    scale: 0
