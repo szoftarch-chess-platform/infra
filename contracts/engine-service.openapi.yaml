@@ -2,7 +2,7 @@ openapi: 3.1.2
 
 info:
   title: engine-service
-  version: 1.0.0
+  version: 2.0.0
   description: >-
     The computer move in a game against the bot. Only the game-service calls this API, on the
     internal network of compose. ADR-6 decides the call, ADR-8 the notation and ES-ADR-2 the engine.
@@ -28,7 +28,8 @@ paths:
       description: >-
         Returns the move that the engine chooses for the side to move. The answer arrives within
         10 seconds. The same position can be asked again at any time, so the caller can repeat a
-        request that failed.
+        request that failed with 500. A request that fails with 400 or 422 gets the same answer
+        again.
       requestBody:
         required: true
         content:
@@ -37,6 +38,7 @@ paths:
               $ref: '#/components/schemas/MoveRequest'
             example:
               fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1
+              variant: standard
       responses:
         '200':
           description: The move of the engine.
@@ -48,8 +50,7 @@ paths:
                 move: e7e5
         '400':
           description: >-
-            The request is malformed, the FEN is invalid or describes an illegal position, or the
-            side to move has no legal move.
+            The request is malformed, or the FEN is invalid or describes an illegal position.
           content:
             application/problem+json:
               schema:
@@ -57,9 +58,21 @@ paths:
               example:
                 title: Invalid position
                 status: 400
-                detail: The FEN has 5 fields instead of 6.
+                detail: The FEN position is invalid.
+        '422':
+          description: >-
+            The request is well formed, but the engine cannot answer it, because the side to move
+            has no legal move or the variant is not supported.
+          content:
+            application/problem+json:
+              schema:
+                $ref: './shared-schemas.yaml#/ProblemDetails'
+              example:
+                title: Invalid position
+                status: 422
+                detail: The side to move has no legal move.
         '500':
-          description: The engine failed. The caller can repeat the request.
+          description: The engine failed or is unavailable. The caller can repeat the request.
           content:
             application/problem+json:
               schema:
@@ -77,6 +90,10 @@ components:
       properties:
         fen:
           $ref: './shared-schemas.yaml#/Fen'
+        variant:
+          $ref: './shared-schemas.yaml#/Variant'
+          description: The variant of the game. Without it the engine plays standard chess.
+          default: standard
 
     MoveResponse:
       type: object
