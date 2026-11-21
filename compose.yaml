@@ -3,10 +3,19 @@
 
 name: chess-platform
 
+# Docker checks a container every 2 seconds while it starts, so compose notices at once when it is
+# healthy, and every 30 seconds after that. A failed check counts only after the first successful
+# one or after the first 60 seconds.
 x-healthcheck-timing: &healthcheck-timing
-  interval: 5s
+  start_period: 60s
+  start_interval: 2s
+  interval: 30s
   timeout: 5s
-  retries: 12
+  retries: 3
+
+# The database of the platform-service, for the service and for its migrations.
+x-platform-database: &platform-database
+  ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${PLATFORM_DB_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
 
 services:
   # The only container with a port on the host in this file. compose.dev.yaml adds the ports for development.
@@ -58,15 +67,29 @@ services:
   platform-service:
     image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
     environment:
-      ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${PLATFORM_DB_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
+      <<: *platform-database
     networks:
       - default
       - postgres
       - rabbitmq
     depends_on:
+      platform-migrations:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+
+  # Applies the migrations of the platform-service once and exits, before the service starts.
+  platform-migrations:
+    image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
+    entrypoint: ["./efbundle"]
+    environment:
+      <<: *platform-database
+    networks:
+      - postgres
+    depends_on:
+      postgres:
         condition: service_healthy
 
   game-service:
@@ -166,9 +189,9 @@ services:
       - rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
+      <<: *healthcheck-timing
+      # The command line tool starts an Erlang VM for every check, so a check gets more time.
       timeout: 10s
-      retries: 12
 
 # The default network connects the gateway with the containers behind it.
 # Each data store and the engine has a network of its own with the services that use it.

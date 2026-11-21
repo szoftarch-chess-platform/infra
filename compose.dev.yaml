@@ -21,6 +21,10 @@ services:
   platform-service:
     build: ../platform-service
 
+  # The same image as the platform-service, so the build cache serves it.
+  platform-migrations:
+    build: ../platform-service
+
   # The database for a platform-service that runs on the host, and for database tools.
   postgres:
     ports:
