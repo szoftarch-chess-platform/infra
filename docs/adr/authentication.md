@@ -1,6 +1,6 @@
 # ADR-4: Authentication with JWT validation in the gateway
 
-**Related:** F-1, NF-1, X-7, [ADR-3](api-gateway.md), [ADR-5](database.md)
+**Related:** F-1, NF-1, X-7, [ADR-3](api-gateway.md), [ADR-5](database.md), [ADR-10](live-game.md)
 
 ## Context
 
@@ -10,14 +10,15 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 
 - **Issuing:** the platform-service signs the users in and issues the tokens on registration, login and refresh. It signs them with ES256, which is ECDSA on the P-256 curve. Compose mounts the private key into its container as a PEM file in PKCS #8 format, and the platform-service reads the path of the file from the `Jwt:SigningKeyPath` setting. The gateway reads the public key from a local JWKS file. The `kid` in the header of the token identifies the key in the JWKS, and it is the JWK thumbprint of the public key. A script in `infra` creates the development key pair and its JWKS outside version control.
 - **Content:** `iss` = `platform-service`, `aud` = `chess-platform`, `sub` = the user id, `preferred_username` = the user name, plus `iat` and `exp`.
-- **Lifetime and refresh:** the access token is valid for 15 minutes. It comes with a random, opaque refresh token, which is valid for 7 days, and the platform-service stores only its hash. Every refresh with `POST /api/auth/refresh` gives a new refresh token and invalidates the old one, which is called rotation. If a refresh token that was already replaced arrives again, the platform-service revokes the tokens of the whole session.
+- **Lifetime and refresh:** the access token is valid for 15 minutes. It comes with a random, opaque refresh token, which is valid for 7 days from its issue, and the platform-service stores only its hash. Every refresh with `POST /api/auth/refresh` gives a new refresh token and invalidates the old one, which is called rotation. So a session lasts as long as the user refreshes at least once in 7 days. A session consists of the refresh tokens that come from one registration or sign-in through refreshes.
+- **Reuse:** a refresh token that was replaced at most 10 seconds ago still gets new tokens and revokes nothing. If a refresh token that was replaced earlier arrives again, the platform-service revokes the tokens of the whole session.
 - **Logout:** `POST /api/auth/logout` revokes the refresh tokens of the session and deletes both cookies. The access token stays valid until it expires.
-- **Transport:** the access token travels in the `__Host-access-token` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`), so the WebSocket handshake carries it too. The refresh token is in the `__Secure-refresh-token` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/api/auth`), so it only reaches the auth endpoints. For tests the `Authorization: Bearer` header is accepted too.
+- **Transport:** the access token travels in the `__Host-access-token` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`), so the WebSocket handshake carries it too. The refresh token is in the `__Secure-refresh-token` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/api/auth`), so it only reaches the auth endpoints. Each cookie gets the lifetime of its token as its `Max-Age`, which is 900 seconds for the access cookie and 604800 for the refresh cookie. For tests the `Authorization: Bearer` header is accepted too.
 - **Validation:** the `jwt_authn` filter of Envoy checks the signature, the issuer, the audience and the expiry. Then the `claim_to_headers` setting puts the `sub` claim into the `x-user-id` header and the `preferred_username` claim into the `x-user-name` header.
 - **User id:** a UUID v7, which the platform-service assigns at registration, and every service refers to the user with it.
 - **User name:** 3 to 20 characters from the letters of the English alphabet, digits, underscore and hyphen (`^[A-Za-z0-9_-]{3,20}$`), unique regardless of case.
 - **Email address:** required at registration, at most 254 characters, unique regardless of case. It is not verified.
-- **Password:** 8 to 128 characters of any kind, without composition rules.
+- **Password:** 8 to 128 characters of any kind, without composition rules. A character is a Unicode code point, so the frontend and the platform-service count the length the same way.
 - **Sign-in:** with the user name and the password. The user name is matched regardless of case.
 - **Authorization:** the domain-level decisions, such as whether the user is a player of a given game, stay in the services.
 - **Trust:** the services that the clients use can only be reached through the gateway, and of the `x-user-*` headers they read only `x-user-id` and `x-user-name`.
@@ -38,10 +39,13 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - The JWK thumbprint is a hash of the public key. The platform-service can compute the `kid` from its key file, so it needs no separate setting that could differ from the JWKS.
 - The gateway validates locally and does not ask the platform-service, so the access token cannot be revoked. The short lifetime limits how long a stolen token, or one left over after logout, can be used.
 - Rotating the refresh token and detecting its reuse is what the OAuth 2.0 security recommendation, RFC 9700, advises for browser-based clients. The platform-service stores the refresh token, so it can be revoked immediately on logout.
+- Strict rotation would end the session whenever two tabs refresh at the same time or the response of a refresh is lost. The identity providers handle this in two layers. Their browser SDKs send one refresh at a time across the tabs, such as auth0-spa-js with the Web Locks API, and their servers still accept a token that was just replaced. The window is 30 seconds by default at Okta and 10 seconds at Supabase, and Auth0 calls it the reuse interval. It is kept short, because a stolen token that is used within it escapes the reuse detection.
+- With a sliding lifetime an active user stays signed in, while a session that nobody uses for 7 days ends.
 - `preferred_username` is the standard OpenID Connect claim for the short user name. There `name` means the full name.
 - According to RFC 9110 a new header value should consist only of visible ASCII characters, and the recipient has to treat any other bytes as opaque data. Kestrel rejects them by default, and Node reads them as Latin-1. So an ASCII user name can travel unchanged in the `x-user-name` header, and it also rules out impersonation with look-alike Unicode characters.
 - The team asked for a unique email address at registration. It is not verified, because the system sends no email and depends on no external system at runtime.
 - Both NIST SP 800-63B-4 and OWASP ASVS 5.0 forbid composition rules and ask that passwords of at least 64 characters are accepted. ASVS requires at least 8 characters and strongly recommends 15, and NIST requires 15 for a password that is the only factor. The first version uses 8, the requirement of ASVS level 1, so registration stays easy, and raising it changes only the rule. The frontend and the platform-service check the same rule (NF-1).
+- NIST SP 800-63B-4 counts every Unicode code point as one character, and JSON Schema counts the length of a string the same way. JavaScript and .NET count UTF-16 code units, so both sides count the code points explicitly.
 - The user name is the public identity in the game, so the user signs in with it, and the sign-in form needs one identifier only.
 - `SameSite=Strict` is the strongest built-in protection against CSRF, and every request of the SPA starts from the same site. The browser accepts a cookie with the `__Host-` prefix only with `Secure`, `Path=/` and without `Domain`, so another host cannot overwrite it.
 - The browser sends the cookie with a WebSocket handshake too, and no same-origin rule stops a page from opening a WebSocket to another address. `SameSite=Strict` does not cover every case, because a page on another port of the same host or on a sibling subdomain counts as the same site. The browser sets the `Origin` header of the handshake, and a page cannot change it.
@@ -57,6 +61,9 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - **RS256:** a much longer signature and key, without an advantage.
 - **JWKS endpoint in the platform-service:** it is the standard way of key rotation, but Envoy would fetch the key from the platform-service at startup and on every refresh.
 - **Long-lived access token without refresh:** simpler, but it would stay usable for hours after logout.
+- **Strict rotation without a grace window:** simpler, but parallel refreshes and a lost response would sign the user out.
+- **A lifetime of 7 days from the sign-in:** a stolen session would end sooner, but an active user would have to sign in again every week.
+- **Session cookies without `Max-Age`:** the browser would drop them when it closes, together with the refresh token of 7 days.
 - **Revocation list for the access tokens, for example in Redis:** every request would need an external check in the gateway, which removes the advantage of the local validation.
 - **Non-ASCII user name percent-encoded in the claim:** every reader in all three languages would have to decode it, and a forgotten decoding shows a wrong name.
 - **Non-ASCII user name as raw UTF-8 in the header:** Kestrel rejects it by default, Node reads it as Latin-1, and even after changing that every component would have to handle it the same way.
@@ -69,7 +76,8 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - The gateway is a critical component. A broken configuration affects every service.
 - The list of identity headers is a contract between the gateway and the services. A new header needs the `claim_to_headers` setting of Envoy and the services that read it to be extended at the same time.
 - Every service handles the user id as a UUID. The time of the registration can be read from the id.
-- After a 401 response or a failed WebSocket connect, the frontend calls `/api/auth/refresh` once and repeats the request. It has to queue parallel refreshes, otherwise the second one would send a refresh token that was already replaced, which would look like reuse.
+- After a 401 response or a failed WebSocket connect, the frontend calls `/api/auth/refresh` once and repeats the request. The tabs of a browser share the cookies, and ADR-10 lets a user play from several tabs, so the frontend sends one refresh at a time across all of its tabs, for example with the Web Locks API. A request that waited for a refresh repeats itself first, and the frontend refreshes only if it gets 401 again. The grace window covers what slips through, such as a refresh whose response was lost.
+- A refresh within the grace window can leave several valid refresh tokens in one session for a while. Each of them expires after 7 days, and logout revokes all of them.
 - The gateway checks a WebSocket connection only when it is opened, so an open connection can outlive the expiry of the access token and the logout. On logout the frontend closes the connection.
 - Because of the `Secure` and `__Host-` cookies, local development runs on HTTPS too, including the dev server of the frontend.
 - To do: the storage of the refresh tokens and the rules of the accounts go into the platform-service, and compose mounts the private key into it.
@@ -83,7 +91,13 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - Envoy `jwt_authn`, supported algorithms and local JWKS: https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/jwt_authn_filter
 - RFC 7638, JSON Web Key Thumbprint: https://www.rfc-editor.org/rfc/rfc7638
 - RFC 9700, OAuth 2.0 Security Best Current Practice: https://www.rfc-editor.org/rfc/rfc9700
+- Okta, refresh token rotation and its grace period: https://developer.okta.com/docs/guides/refresh-tokens/refresh-token-rotation/
+- Auth0, refresh token rotation and its reuse interval: https://auth0.com/docs/secure/tokens/refresh-tokens/refresh-token-rotation
+- Supabase, sessions and the reuse interval of refresh tokens: https://supabase.com/docs/guides/auth/sessions
+- auth0-spa-js, the lock between the tabs: https://app.unpkg.com/@auth0/auth0-spa-js@2.24.1/files/src/lock.ts
+- MDN, Web Locks API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API
 - NIST SP 800-63B-4, password verifiers: https://pages.nist.gov/800-63-4/sp800-63b.html
+- JSON Schema Validation 2020-12, the length of a string: https://json-schema.org/draft/2020-12/json-schema-validation#section-6.3.1
 - OWASP ASVS 5.0, V6 Authentication: https://github.com/OWASP/ASVS/blob/master/5.0/en/0x15-V6-Authentication.md
 - OpenID Connect Core 1.0, Standard Claims: https://openid.net/specs/openid-connect-core-1_0.html#StandardClaims
 - RFC 9110, Field Values: https://www.rfc-editor.org/rfc/rfc9110#section-5.5

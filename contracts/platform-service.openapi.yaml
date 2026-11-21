@@ -2,7 +2,7 @@ openapi: 3.1.2
 
 info:
   title: platform-service
-  version: 1.0.0
+  version: 2.0.0
   description: >-
     The REST API of the platform-service through the gateway. ADR-3 decides the routes, ADR-4 the
     tokens, the cookies and the rules of the accounts, ADR-8 the content and the errors.
@@ -10,8 +10,8 @@ info:
 
     The endpoints under `/api/auth` work without a token. Every other endpoint needs the access
     token, and the gateway answers 401 itself when it is missing, invalid or expired. That 401 has
-    no specified body. After it the client calls `POST /api/auth/refresh` once and repeats the
-    request.
+    no specified body. After it the client refreshes the tokens as `POST /api/auth/refresh`
+    describes and repeats the request.
 
 servers:
   - url: https://localhost:8443
@@ -63,6 +63,23 @@ paths:
                 userName: alice
         '400':
           $ref: '#/components/responses/ValidationFailed'
+        '409':
+          description: >-
+            The user name or the email address is already taken. `errors` names the fields that are
+            taken, so the client can show the message next to them.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ConflictProblem'
+              example:
+                title: Conflict
+                status: 409
+                detail: The user name is already taken.
+                errors:
+                  userName:
+                    - The user name is already taken.
+                traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -123,8 +140,15 @@ paths:
       summary: Renew the tokens
       description: >-
         Replaces the refresh token in the cookie with a new one and issues a new access token. A
-        refresh token that was already replaced revokes every token of its session. The client
-        sends one refresh at a time and lets parallel requests wait for it.
+        refresh token that was replaced at most 10 seconds ago still gets new tokens, so parallel
+        refreshes and a lost response do not end the session. A refresh token that was replaced
+        earlier revokes every token of its session.
+
+
+        The tabs of a browser share the cookies, so the client sends one refresh at a time across
+        all of its tabs, for example with the Web Locks API, and the other requests wait for it. A
+        request that waited repeats itself first, and the client refreshes only if it gets 401
+        again.
       security: []
       parameters:
         - $ref: '#/components/parameters/RefreshTokenCookie'
@@ -136,8 +160,8 @@ paths:
               $ref: '#/components/headers/TokenCookies'
         '401':
           description: >-
-            The refresh token is missing, unknown, expired, revoked or already replaced. The
-            response deletes both cookies, and the user has to sign in again.
+            The refresh token is missing, unknown, expired or revoked, or it was replaced more than
+            10 seconds ago. The response deletes both cookies, and the user has to sign in again.
           headers:
             Set-Cookie:
               $ref: '#/components/headers/DeletedTokenCookies'
@@ -204,7 +228,10 @@ paths:
         - games
       operationId: listGames
       summary: List the finished games of the user
-      description: The finished games in which the signed-in user played, the newest first.
+      description: >-
+        The finished games in which the signed-in user played, ordered by `endedAt` with the newest
+        first. Games that ended at the same time are ordered by their id in descending order, so the
+        pages do not overlap.
       parameters:
         - name: page
           in: query
@@ -357,20 +384,21 @@ components:
   headers:
     TokenCookies:
       description: >-
-        Sets `__Host-access-token` (`HttpOnly; Secure; SameSite=Strict; Path=/`) and
-        `__Secure-refresh-token` (`HttpOnly; Secure; SameSite=Strict; Path=/api/auth`), as ADR-4 decides.
+        Sets `__Host-access-token` (`HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900`) and
+        `__Secure-refresh-token` (`HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=604800`),
+        as ADR-4 decides. The Max-Age of a cookie is the lifetime of its token in seconds.
       schema:
         type: string
     DeletedTokenCookies:
-      description: Deletes `__Host-access-token` and `__Secure-refresh-token`.
+      description: >-
+        Deletes `__Host-access-token` and `__Secure-refresh-token` with the same attributes and an
+        expiry in the past.
       schema:
         type: string
 
   responses:
     ValidationFailed:
-      description: >-
-        The request is invalid. `errors` lists the messages by field, and a user name or an email
-        address that is already taken is an error of its field too.
+      description: The request is invalid. `errors` lists the messages by field.
       content:
         application/problem+json:
           schema:
@@ -380,7 +408,7 @@ components:
             status: 400
             errors:
               userName:
-                - The user name is already taken.
+                - The user name must be 3 to 20 characters long.
               password:
                 - The password must be at least 8 characters long.
             traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
@@ -420,7 +448,7 @@ components:
           type: string
           minLength: 8
           maxLength: 128
-          description: Any characters, without composition rules.
+          description: Any characters, without composition rules. The length counts Unicode code points.
 
     LoginRequest:
       type: object
@@ -435,6 +463,10 @@ components:
         password:
           type: string
           minLength: 1
+          maxLength: 128
+          description: >-
+            At most as long as at registration, so a longer password is never right. The length
+            counts Unicode code points.
 
     CurrentUser:
       type: object
@@ -535,9 +567,23 @@ components:
             - errors
           properties:
             errors:
-              type: object
-              description: The messages by the camelCase path of the field.
-              additionalProperties:
-                type: array
-                items:
-                  type: string
+              $ref: '#/components/schemas/FieldErrors'
+
+    ConflictProblem:
+      description: A conflict with the stored data, with the messages by the field that conflicts.
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - errors
+          properties:
+            errors:
+              $ref: '#/components/schemas/FieldErrors'
+
+    FieldErrors:
+      type: object
+      description: The messages by the camelCase path of the field.
+      additionalProperties:
+        type: array
+        items:
+          type: string
