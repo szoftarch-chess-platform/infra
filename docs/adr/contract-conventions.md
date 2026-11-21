@@ -16,7 +16,7 @@ The contracts are read and written in three languages. If every contract had its
 - **Errors of Socket.IO:** the acknowledgement of a client event is `{ "ok": true, … }` or `{ "ok": false, "error": { "code": …, "message": … } }`. The `code` is a value from the list of the contract, and the `message` is English text for the logs.
 - **Position:** FEN with all six fields.
 - **Move:** UCI notation, which is the start square and the target square, such as `e2e4`. A promotion adds the new piece in lowercase, such as `e7e8q`, and castling is the move of the king, such as `e1g1`. A move history is the list of its UCI moves in order. SAN does not appear in the contracts.
-- **Variant:** the messages about a game carry `variant`, whose only value is `standard`. The move request of the engine carries only the position, as ADR-6 decides.
+- **Variant:** the messages about a game carry `variant`, whose only value is `standard`. The move request of the engine carries the position and an optional `variant` with `standard` as its default, as ADR-6 decides.
 - **Player:** an object with a `kind`. A user is `{ "kind": "user", "userId": …, "name": … }` with the user name, and the computer opponent is `{ "kind": "bot", "name": "Stockfish bot" }`.
 - **Result:** `result` is `whiteWon`, `blackWon`, `draw` or `aborted`, and `reason` says why the game ended. ADR-10 decides the reasons.
 - **Clock:** the time control is `{ "initialMs": … }`. A message sends the clock as the remaining time of each user at the moment of sending, with the color whose clock runs.
@@ -32,7 +32,7 @@ The contracts are read and written in three languages. If every contract had its
 - Socket.IO has no status codes. The client has to react to some refusals, for example by putting the piece back after `illegalMove`, so it needs a fixed list of codes.
 - chess.js reads and writes FEN, and its verbose moves carry the UCI form of the move in `lan`. Stockfish speaks UCI. So the client move, the engine move and the stored history have the same form, and no service converts between notations.
 - The team does not show SAN in the first version. The frontend can derive it from the moves with chess.js if it is needed later.
-- A new game mode adds a value of `variant` and an optional field to the move request, which are compatible changes by ADR-7 (NF-8).
+- The messages and the move request already carry `variant`, so a new game mode adds only a value of it, which is a compatible change by ADR-7 (NF-8).
 - The bot is not a user and has no id. Its name contains a space, which the user name rule of ADR-4 does not allow, so no user can appear as the bot.
 - The clients count down from the moment the message arrives, so the clocks of the machines do not have to agree. A deadline as a timestamp of the server would need synchronized clocks.
 
