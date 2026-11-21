@@ -59,6 +59,10 @@ services:
     image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
     environment:
       ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${PLATFORM_DB_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
+    networks:
+      - default
+      - postgres
+      - rabbitmq
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,11 +73,15 @@ services:
     image: ghcr.io/szoftarch-chess-platform/game-service:${GAME_SERVICE_TAG:?set it in .env}
     environment:
       PORT: 3001
+      HOST: 0.0.0.0
+      REDIS_URL: redis://game-service:${GAME_REDIS_PASSWORD:?set it in .env}@redis:6379
     # Node.js does not stop on SIGTERM as process 1, so an init process forwards it.
     init: true
     networks:
       - default
       - engine
+      - redis
+      - rabbitmq
     depends_on:
       redis:
         condition: service_healthy
@@ -90,12 +98,14 @@ services:
     image: ghcr.io/szoftarch-chess-platform/engine-service:${ENGINE_SERVICE_TAG:?set it in .env}
     environment:
       PORT: 8000
+      HOST: 0.0.0.0
     # Python does not handle SIGTERM as process 1, so an init process forwards it.
     init: true
     networks:
       - engine
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/health"]
+      # The image has no wget or curl, so Python asks for the health check. It fails on any status other than 2xx.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
       <<: *healthcheck-timing
 
   postgres:
@@ -106,6 +116,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - postgres
     healthcheck:
       # The init scripts run on a server without TCP, so the check passes only when they are done.
       test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "postgres"]
@@ -113,11 +125,32 @@ services:
 
   redis:
     image: redis:8.8-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    # Only the user of the game-service can sign in. It may use every command
+    # except the administrative ones, and the default user is turned off.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --user
+      - default
+      - "off"
+      - --user
+      - game-service
+      - "on"
+      - ">${GAME_REDIS_PASSWORD:?set it in .env}"
+      - "~*"
+      - "&*"
+      - "+@all"
+      - "-@admin"
+    environment:
+      # The password of redis-cli in the health check.
+      REDISCLI_AUTH: ${GAME_REDIS_PASSWORD:?set it in .env}
     volumes:
       - redis-data:/data
+    networks:
+      - redis
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli --user game-service ping | grep -q PONG"]
       <<: *healthcheck-timing
 
   rabbitmq:
@@ -129,15 +162,22 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       timeout: 10s
       retries: 12
 
+# The default network connects the gateway with the containers behind it.
+# Each data store and the engine has a network of its own with the services that use it.
 networks:
   engine:
     internal: true
+  postgres:
+  redis:
+  rabbitmq:
 
 volumes:
   postgres-data:

@@ -21,7 +21,7 @@ The GitHub organization `szoftarch-chess-platform` has five repos:
 - **Contracts:** the contracts between the services are in the `contracts/` folder of the `infra` repo. OpenAPI describes the REST interfaces, and AsyncAPI describes the WebSocket events and the messages of the broker.
 - **Images:** every service builds its container image in the CI of its own repo and pushes it to the GitHub Container Registry as `ghcr.io/szoftarch-chess-platform/<repo>`. An image is published only for a git tag of the form `v1.0.0`, and its tag is the version number. On pull requests the CI only builds and tests.
 - **Compose:** the base compose file of `infra` refers to these images and takes the tag of each service from an environment variable. For local development an override file named `compose.dev.yaml` builds the selected services from the repos cloned into sibling folders. A developer selects a service by building it, and the tag of every other service points to a released version.
-- **Settings of compose:** the image tags, the host port of the gateway and the passwords are required variables without default values. Compose reads them from an `.env` file outside version control. For local development a script creates this file with random passwords.
+- **Settings of compose:** the image tags, the host port of the gateway and the passwords are required variables without default values. Compose reads them from an `.env` file outside version control. For local development a script creates this file with random passwords, and it adds the variables of `.env.example` that an existing file lacks, with random values for the new passwords.
 - **Scripts:** the scripts of `infra` are Node.js modules that use only the built-in modules of Node.js 22.19 or newer.
 
 ## Rationale
@@ -43,6 +43,7 @@ The GitHub organization `szoftarch-chess-platform` has five repos:
 - **Documentation outside the repos:** it is not versioned together with the code that it describes.
 - **Shell scripts that run in containers:** the host would need only Docker, but signing a token with OpenSSL in a shell script is fragile, and the smoke test would reach the gateway from inside the compose network and not through the published port.
 - **Bash scripts on the host:** on Windows they run only in Git Bash and not in PowerShell.
+- **Turning off the filesystem entitlement check of Bake with `BUILDX_BAKE_ENTITLEMENTS_FS=0`:** older Compose versions would build too, but a build could then read any file of the machine and not only its own inputs.
 
 ## Consequences
 
@@ -52,11 +53,15 @@ The GitHub organization `szoftarch-chess-platform` has five repos:
 - The repos have to be cloned into sibling folders, because the override file and the imports of the CLAUDE.md files refer to the sibling repos.
 - When the tag of a service has no image on the machine, compose first tries to pull it and builds it only if the registry does not have it. So a released version is pulled, and the `dev` tag is built.
 - Every developer needs Node.js for the scripts, including those who work on the Python or the .NET service.
+- An existing setup gets a new password without losing its data, but it has to run the script again after a pull that changes `.env.example`.
+- Compose builds with Buildx Bake, which reads files outside its working folder only with a filesystem entitlement. Compose grants it read access to the build inputs of the services, which are in the sibling folders. Compose 5.6 and older grant only the build context and not the Dockerfile, and on Windows a lowercase drive letter in the working folder, which a cmd or Git Bash started from VS Code can get, then makes Bake reject the Dockerfile. So the setup needs Compose 5.7.0 or newer, which also grants each Dockerfile.
 
 ## Sources
 
 - The Twelve-Factor App, V. Build, release, run: https://www.12factor.net/build-release-run
 - Merging Compose files: https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/
+- Docker Compose, the filesystem entitlements of Bake: https://github.com/docker/compose/issues/14285
+- Docker Compose releases, the fix in v5.7.0: https://github.com/docker/compose/releases
 - Environment variables of Compose: https://docs.docker.com/compose/how-tos/environment-variables/envvars/
 - GitHub Container Registry: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 - OpenAPI Specification: https://spec.openapis.org/oas/latest.html

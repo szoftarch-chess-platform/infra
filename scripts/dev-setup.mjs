@@ -2,7 +2,8 @@
 // These are the key pair and the JWKS of the access tokens, the certificate of the gateway
 // and the .env file of compose.
 //
-// The script creates only what is missing. To renew a file, delete it and run the script again.
+// The script creates only what is missing, and it adds the variables of .env.example that an
+// existing .env lacks. To renew a file, delete it and run the script again.
 //
 // Usage: node scripts/dev-setup.mjs
 
@@ -135,20 +136,38 @@ function createGatewayCertificate() {
   targets.forEach((target, index) => write(target, blocks[index]));
 }
 
+// Gives every empty password a random value.
+function fillPasswords(text) {
+  return text.replace(/^(\w+PASSWORD)=(?=\r?$)/gm, (_, name) => `${name}=${randomBytes(24).toString('hex')}`);
+}
+
 // The .env file is a copy of .env.example in which every empty password gets a random value.
+// An existing .env keeps its values and gets the variables that it lacks, with their comments,
+// so an existing setup gets a new password without losing its data.
 function createEnvFile() {
   const envPath = path('.env');
-  if (existsSync(envPath)) {
+  const example = readFileSync(path('.env.example'), 'utf8');
+
+  if (!existsSync(envPath)) {
+    write(envPath, fillPasswords(example));
+    return;
+  }
+
+  const env = readFileSync(envPath, 'utf8');
+  const existing = new Set(Array.from(env.matchAll(/^(\w+)=/gm), (match) => match[1]));
+  const missing = Array.from(example.matchAll(/^(?:#.*\r?\n)*(\w+)=.*$/gm)).filter(
+    (match) => !existing.has(match[1]),
+  );
+
+  if (missing.length === 0) {
     keep(envPath);
     return;
   }
 
-  const example = readFileSync(path('.env.example'), 'utf8');
-  const env = example.replace(
-    /^(\w+PASSWORD)=(?=\r?$)/gm,
-    (_, name) => `${name}=${randomBytes(24).toString('hex')}`,
-  );
-  write(envPath, env);
+  const additions = missing.map((match) => fillPasswords(match[0].replace(/\r$/, ''))).join('\n\n');
+  const separator = env.endsWith('\n') ? '\n' : '\n\n';
+  writeFileSync(envPath, `${env}${separator}${additions}\n`);
+  console.log(`added   ${missing.map((match) => match[1]).join(', ')} to ${relative(root, envPath)}`);
 }
 
 createTokenKeys();

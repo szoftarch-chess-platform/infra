@@ -14,16 +14,6 @@ for repo in frontend game-service engine-service platform-service infra; do
 done
 ```
 
-The same in PowerShell:
-
-```powershell
-mkdir chess-platform; cd chess-platform
-foreach ($repo in 'frontend', 'game-service', 'engine-service', 'platform-service', 'infra') {
-  git clone "https://github.com/szoftarch-chess-platform/$repo.git"
-  git -C $repo switch dev
-}
-```
-
 The result is this layout:
 
 ```
@@ -45,7 +35,7 @@ The compose files run the whole system. [ADR-2](docs/adr/polyrepo.md) decides ho
 
 ### Requirements
 
-- Docker with Compose
+- Docker with Compose 5.7.0 or newer, which `docker compose version` shows
 - Node.js 22.19 or newer for the scripts
 
 ### Running locally
@@ -61,11 +51,14 @@ Build the images of the services from the sibling folders:
 ```bash
 docker compose build
 ```
+
 To build only the service that you work on, name it, for example:
 ```bash
 docker compose build game-service
 ```
 To use the released image of a service, set its tag in `.env` to the released version.
+
+If the build stops with `additional privileges requested`, update Docker Desktop or Compose to the version in the requirements. Do not turn off the check with `BUILDX_BAKE_ENTITLEMENTS_FS=0`.
 
 Start everything and wait until it is healthy:
 ```bash
@@ -76,14 +69,11 @@ The development override publishes these ports, which only the local machine rea
 
 | Address | Service |
 |---|---|
-| `127.0.0.1:6379` | Redis |
+| `127.0.0.1:5432` | PostgreSQL, with the user `postgres` and the password `POSTGRES_PASSWORD` of `.env`, or on the database platform with the user `platform` and the password `PLATFORM_DB_PASSWORD` |
 | `127.0.0.1:5672` | AMQP of RabbitMQ |
+| `127.0.0.1:6379` | Redis, with the user `game-service` and the password `GAME_REDIS_PASSWORD` of `.env` |
+| http://127.0.0.1:8000 | engine-service |
 | http://127.0.0.1:15672 | web management interface of RabbitMQ, with the user `admin` and the password `RABBITMQ_ADMIN_PASSWORD` of `.env` |
-
-To run a service on the host, for example with the hot reload of its dev server, start only the containers that it needs. The platform-service needs RabbitMQ, and the game-service needs Redis and RabbitMQ. Starting only the Redis and the RabbitMQ looks like this:
-```bash
-docker compose up -d --wait redis rabbitmq
-```
 
 Check the paths through the gateway:
 ```bash
@@ -102,6 +92,40 @@ Or stop the containers deleting the data:
 docker compose down --volumes
 ```
 
+### Running a service on the host
+
+A service runs on the host, for example with the hot reload of its dev server, against the addresses above. It listens on the same port as in its container, which is 8080 for the platform-service and 3001 for the game-service, and only on `127.0.0.1`. The platform-service needs PostgreSQL and RabbitMQ, and the game-service needs Redis, RabbitMQ and the engine-service. The README of the service describes its settings.
+
+To reach it through the gateway, add the override file of the service to `COMPOSE_FILE` in `.env`.
+
+| Service on the host | Override file |
+|---|---|
+| platform-service | `compose.platform-on-host.yaml` |
+| game-service | `compose.game-on-host.yaml` |
+
+For the platform-service the line looks like this:
+```
+COMPOSE_FILE=compose.yaml,compose.dev.yaml,compose.platform-on-host.yaml
+```
+
+Then start everything as usual. Compose removes the container of the service, and the gateway sends its requests to the host.
+```bash
+docker compose up -d --wait
+```
+
+On Linux the service listens on the address of the Docker bridge instead of `127.0.0.1`. The address is 172.17.0.1 by default, and this command prints it:
+```bash
+docker network inspect bridge --format "{{(index .IPAM.Config 0).Gateway}}"
+```
+If a firewall such as ufw runs on the machine, it has to let the Docker networks reach the port of the service.
+
+To switch back to the container, remove the override file from `COMPOSE_FILE` and start everything again.
+
+Without the gateway it is enough to start the containers that the service needs, for example for the game-service:
+```bash
+docker compose up -d --wait redis rabbitmq engine-service
+```
+
 ### Configuration
 
 Compose reads its variables from `.env`, and every one of them is required.
@@ -113,9 +137,10 @@ Compose reads its variables from `.env`, and every one of them is required.
 | `GATEWAY_PORT` | host port of the gateway |
 | `POSTGRES_PASSWORD` | password of the postgres superuser |
 | `PLATFORM_DB_PASSWORD` | password of the database user of the platform-service |
+| `GAME_REDIS_PASSWORD` | password of the Redis user of the game-service |
 | `RABBITMQ_ADMIN_PASSWORD` | password of the admin user of RabbitMQ |
 
-`scripts/dev-setup.mjs` copies .env.example to .env and fills the empty passwords with random values. It creates only the files that are missing in the secrets folder. To renew a key, the certificate or `.env`, delete it and run the script again. The database passwords take effect only on an empty data volume.
+`scripts/dev-setup.mjs` copies .env.example to .env and fills the empty passwords with random values. To an existing .env it adds the variables of .env.example that it lacks, so run the script again after every pull that changes .env.example. It creates only the files that are missing in the secrets folder. To renew a key, the certificate or `.env`, delete it and run the script again. The database passwords take effect only on an empty data volume.
 
 ### Checking the config files
 
@@ -159,6 +184,7 @@ On Linux import `secrets/tls/ca.crt` as an authority in the certificate settings
 infra/
 ├── compose.yaml              # base compose file with the released images
 ├── compose.dev.yaml          # override that builds the services from the sibling folders and publishes the ports for development
+├── compose.*-on-host.yaml    # overrides that send the requests of the gateway to a service on the host
 ├── .env.example              # variables of the compose files
 ├── contracts/                # contracts between the services and the configuration of their linter
 ├── envoy/
