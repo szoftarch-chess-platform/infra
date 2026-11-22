@@ -69,6 +69,9 @@ services:
     environment:
       <<: *platform-database
       Jwt__SigningKeyPath: /run/secrets/jwt-signing-key.pem
+    # An error at startup, such as a missing setting, aborts .NET. As process 1 it cannot abort, so it would end
+    # with the exit code 139 of a crash. Under an init process it ends with the exit code 134 of an abort.
+    init: true
     volumes:
       # The private key that signs the access tokens. Only this container gets it.
       - type: bind
