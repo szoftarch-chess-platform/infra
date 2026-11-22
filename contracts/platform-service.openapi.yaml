@@ -443,7 +443,7 @@ components:
           type: string
           format: email
           maxLength: 254
-          description: Unique regardless of case. It is not verified.
+          description: Unique regardless of case. It is not verified. The length counts Unicode code points.
         password:
           type: string
           minLength: 8
