@@ -2,7 +2,7 @@ openapi: 3.1.2
 
 info:
   title: platform-service
-  version: 2.0.0
+  version: 2.1.0
   description: >-
     The REST API of the platform-service through the gateway. ADR-3 decides the routes, ADR-4 the
     tokens, the cookies and the rules of the accounts, ADR-8 the content and the errors.
@@ -12,6 +12,10 @@ info:
     token, and the gateway answers 401 itself when it is missing, invalid or expired. That 401 has
     no specified body. After it the client refreshes the tokens as `POST /api/auth/refresh`
     describes and repeats the request.
+
+
+    The gateway answers 403 to a request with another method than GET, HEAD and OPTIONS that a browser
+    sends from another origin, as ADR-4 decides. That 403 has no specified body.
 
 servers:
   - url: https://localhost:8443
@@ -63,6 +67,8 @@ paths:
                 userName: alice
         '400':
           $ref: '#/components/responses/ValidationFailed'
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
         '409':
           description: >-
             The user name or the email address is already taken. `errors` names the fields that are
@@ -127,6 +133,8 @@ paths:
                 detail: The user name or the password is wrong.
                 traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
                 correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
         '429':
           description: The gateway limits the sign-in attempts of an IP address. The response has no specified body.
         '500':
@@ -175,6 +183,8 @@ paths:
                 detail: The session has ended. Sign in again.
                 traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
                 correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -197,6 +207,8 @@ paths:
           headers:
             Set-Cookie:
               $ref: '#/components/headers/DeletedTokenCookies'
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
         '500':
           $ref: '#/components/responses/InternalError'
 
@@ -415,6 +427,10 @@ components:
             correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
     GatewayUnauthorized:
       description: The gateway found no valid access token. The response has no specified body.
+    GatewayCrossOrigin:
+      description: >-
+        A browser sent the request from another origin, so the gateway rejected it. The response has no
+        specified body.
     InternalError:
       description: The service failed.
       content:

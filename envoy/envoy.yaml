@@ -53,6 +53,31 @@ static_resources:
                                 handle:respond({[":status"] = "403"}, "")
                               end
                             end
+                        # A page of another origin must not change anything with the cookies of the user, and
+                        # even without them the response of a form of another site could delete the cookies.
+                        # The browser names the origin of the request in Sec-Fetch-Site, and older ones only
+                        # in Origin. A request without both does not come from a browser (ADR-4).
+                        same-origin-unsafe:
+                          inline_string: |
+                            function envoy_on_request(handle)
+                              local headers = handle:headers()
+                              local method = headers:get(":method")
+                              if method == "GET" or method == "HEAD" or method == "OPTIONS" then
+                                return
+                              end
+                              local site = headers:get("sec-fetch-site")
+                              if site ~= nil then
+                                if site ~= "same-origin" and site ~= "none" then
+                                  handle:respond({[":status"] = "403"}, "")
+                                end
+                                return
+                              end
+                              local origin = headers:get("origin")
+                              local own = "https://" .. (headers:get(":authority") or "")
+                              if origin ~= nil and origin:lower() ~= own:lower() then
+                                handle:respond({[":status"] = "403"}, "")
+                              end
+                            end
                   - name: envoy.filters.http.jwt_authn
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
@@ -95,12 +120,19 @@ static_resources:
                             path_separated_prefix: /api/auth
                           route:
                             cluster: platform-service
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin-unsafe
 
                         - match:
                             path_separated_prefix: /api
                           route:
                             cluster: platform-service
                           typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin-unsafe
                             envoy.filters.http.jwt_authn:
                               "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.PerRouteConfig
                               requirement_name: signed-in-user
