@@ -68,6 +68,15 @@ services:
     image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
     environment:
       <<: *platform-database
+      Jwt__SigningKeyPath: /run/secrets/jwt-signing-key.pem
+    volumes:
+      # The private key that signs the access tokens. Only this container gets it.
+      - type: bind
+        source: ./secrets/jwt/private-key.pem
+        target: /run/secrets/jwt-signing-key.pem
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - default
       - postgres

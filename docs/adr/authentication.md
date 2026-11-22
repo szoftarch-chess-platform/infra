@@ -80,7 +80,7 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - A refresh within the grace window can leave several valid refresh tokens in one session for a while. Each of them expires after 7 days, and logout revokes all of them.
 - The gateway checks a WebSocket connection only when it is opened, so an open connection can outlive the expiry of the access token and the logout. On logout the frontend closes the connection.
 - Because of the `Secure` and `__Host-` cookies, local development runs on HTTPS too, including the dev server of the frontend.
-- To do: the storage of the refresh tokens and the rules of the accounts go into the platform-service, and compose mounts the private key into it.
+- To do: the refresh with its rotation, the grace window and the reuse detection, and the logout go into the platform-service.
 
 ## Sources
 
