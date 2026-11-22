@@ -31,7 +31,7 @@ tls.setDefaultCACertificates([
   readFileSync(join(root, 'secrets', 'tls', 'ca.crt'), 'utf8'),
 ]);
 
-// Signs an access token with the development key, the way the platform-service will.
+// Signs an access token with the development key, the way the platform-service does.
 function createAccessToken() {
   const privateKey = readFileSync(join(root, 'secrets', 'jwt', 'private-key.pem'));
   const jwks = JSON.parse(readFileSync(join(root, 'secrets', 'jwt', 'jwks.json'), 'utf8'));
@@ -121,6 +121,23 @@ const checks = [
   [
     '/api/users/me with the token in the Authorization header returns the user',
     () => expectCurrentUser({ authorization: `Bearer ${token}` }),
+  ],
+  // The 401 of a wrong password comes from the platform-service with a body, unlike the 401 of the gateway.
+  // So it shows that the route works without a token and that the service reaches its database.
+  [
+    '/api/auth/login without a token reaches the platform-service',
+    async () => {
+      const response = await fetch(`${gateway}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userName: user.userName, password: 'not the password' }),
+      });
+      expect(response.status === 401, `expected 401, got ${response.status}`);
+      expect(
+        response.headers.get('content-type')?.includes('application/problem+json'),
+        'expected the ProblemDetails of the platform-service',
+      );
+    },
   ],
   [
     '/ws/game without a token is rejected',
