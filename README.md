@@ -108,7 +108,7 @@ For the platform-service the line looks like this:
 COMPOSE_FILE=compose.yaml,compose.dev.yaml,compose.platform-on-host.yaml
 ```
 
-Then start everything as usual. Compose removes the container of the service, and the gateway sends its requests to the host.
+Then start everything as usual. Compose removes the container of the service, and the gateway sends its requests to the host. For the platform-service the `platform-migrations` container still applies the migrations of its image.
 ```bash
 docker compose up -d --wait
 ```
