@@ -76,7 +76,7 @@ The two calls get two integration styles.
 - A service that runs on the host while its container runs too has two instances, and two consumers would share the queue of the platform-service. So either the override file of the service removes its container, or only the containers that the service needs are started.
 - On Docker Desktop the gateway reaches a service on the host that listens only on `127.0.0.1`, and the connections arrive from `127.0.0.1`. On Linux a firewall such as ufw may block the Docker networks from the port of the service.
 - A new service that uses a data store joins its network in compose, and a new user of Redis gets an ACL user of its own.
-- To do: the RabbitMQ users of the services with their permissions and the remaining settings above go into the compose of `infra`, the outbox, the sender and the engine call with its timeout and retry into the game-service, and the consumer and the storage of the games into the platform-service.
+- To do: the RabbitMQ users of the services with their permissions and the remaining settings above go into the compose of `infra`, and the consumer into the platform-service.
 
 ## Open questions
 
