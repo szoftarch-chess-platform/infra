@@ -25,7 +25,7 @@ Envoy Proxy 1.40 with static YAML configuration in the `infra` repo, run from th
 | `/ws/game` | game-service | required, from the cookie |
 | `/ws/spectate` | game-service | not needed, the game-service checks the token of the link |
 
-The rate limit on login gives every client address a token bucket of its own for `/api/auth/login`. A bucket holds 30 tokens and gets one new token every 2 seconds, so an address can try 30 times at once and then once every 2 seconds. The route matches regardless of case and also with a slash at the end, because the platform-service routes such paths to the login too. A limited request gets 429 from the gateway and does not reach the platform-service.
+The rate limit on login gives every client address a token bucket of its own for `POST /api/auth/login`. A bucket holds 30 tokens and gets one new token every 2 seconds, so an address can try 30 times at once and then once every 2 seconds. The route matches the method and the path regardless of case and the path also with a slash at the end, because the platform-service routes such requests to the login too. The gateway checks the origin of the request first, as ADR-4 decides, so a request that it refuses does not count. A limited request gets 429 from the gateway and does not reach the platform-service.
 
 The game-service gets no REST route. Every operation of a live game, which means joining and leaving the queue, starting a game against the bot, a move, resigning and fetching the state after a reconnect, is a Socket.IO event on `/ws/game`, and the operations that need an answer use acknowledgements. So `/api/*` belongs entirely to the platform-service, including the endpoints of the game history. The two WebSocket routes are two separate Socket.IO paths (`path`) in the game-service, because the gateway decides about the JWT by route, and the namespace of Socket.IO does not show in the URL.
 
@@ -40,9 +40,10 @@ For local runs a script in `infra` creates a development certificate authority a
 - Built-in fault tolerance with circuit breakers, outlier detection and retry policies.
 - Load balancing. The `STRICT_DNS` cluster also finds the instances scaled in compose.
 - Local rate limiting with a separate token bucket for each IP.
-- NIST SP 800-63B-4 requires controls against online guessing of passwords. The platform-service has no lockout per account, because anyone could lock a user out with wrong passwords (PS-ADR-11), so the limit per address of the gateway is the control.
+- NIST SP 800-63B-4 requires controls against online guessing of passwords. It limits the consecutive failed attempts on one account to 100 by disabling the password, which works again only after an account recovery. The system has no account recovery, because the email addresses are not verified (ADR-4), so a disabled password would lock its user out for good, and anyone could do this with wrong passwords. So the platform-service has no limit per account (PS-ADR-11), and the limit per address of the gateway is the only control. This departs from NIST on purpose.
 - The size of the bucket is the default of Supabase for the password sign-in of its token endpoint, which also counts every request of an IP address in a token bucket. Supabase allows bursts of 30 and 150 requests in 5 minutes. A person who mistypes a password needs only a few attempts, and several users behind one NAT fit into the bucket too. So do the tests on the machine of a developer, where Docker Desktop shows every client with the same address.
 - The gateway counts every attempt, because it does not see whether a sign-in fails.
+- A page of another site can make the browsers of its visitors send requests to the gateway, and these come from the addresses of the visitors. The check of the origin refuses such a POST before the limit counts it, and the GET of an image does not count, so the page cannot use up the attempts of the users behind those addresses.
 - Detailed observability with statistics, a Prometheus endpoint, access logs and tracing.
 - It consists of configuration only, so it needs no repo of its own. It is an active CNCF project.
 - With several Socket.IO servers the default in-memory adapter has to be replaced, so that the events reach every client. The Redis adapter does this over Redis Pub/Sub, and Redis is already part of the system.
@@ -90,6 +91,7 @@ For local runs a script in `infra` creates a development certificate authority a
 - The state of a game changes only through atomic Redis operations, because two events of the same game can arrive at two instances at the same time.
 - To do: the Redis adapter of Socket.IO goes into the game-service.
 - The rate limit holds back the attempts of one address. An attack from many addresses gets 30 attempts a minute from each of them, and the users behind one NAT share one bucket.
+- Nothing limits the attempts on one account, so an attack from many addresses can try any number of passwords for one user, which NIST SP 800-63B-4 does not allow.
 - Envoy keeps the buckets of at most 10,000 addresses at a time. An address whose bucket was dropped starts with a full one, but a bucket is full again a minute after its last request anyway.
 
 ## Sources

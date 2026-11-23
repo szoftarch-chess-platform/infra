@@ -156,18 +156,23 @@ async function expectPostStatus(path, headers, status) {
   expect(response.status === status, `expected ${status}, got ${response.status}`);
 }
 
-function login(password) {
+// The bucket of the sign-in in envoy/envoy.yaml, which gives every address 30 attempts at once and then one every
+// 2 seconds (ADR-3).
+const loginBucket = { maxTokens: 30, fillIntervalMs: 2000 };
+
+function login(password, headers = {}) {
   return fetch(`${gateway}/api/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify({ userName: user.userName, password }),
   });
 }
 
-// The gateway gives every address 30 attempts at once and then one every 2 seconds (ADR-3). An earlier run may have
-// used some of them, so the check signs in with a wrong password until the gateway refuses.
+// An earlier run may have used some of the attempts, so the check signs in with a wrong password until the gateway
+// refuses. A gateway without the limit fails the check after twice as many attempts as the bucket holds.
 async function expectLoginRateLimit() {
-  for (let attempt = 1; attempt <= 100; attempt++) {
+  const maxAttempts = 2 * loginBucket.maxTokens;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const response = await login('not the password');
     await response.text();
     if (response.status === 429) {
@@ -176,9 +181,16 @@ async function expectLoginRateLimit() {
         'expected the 429 of the gateway, not of the platform-service',
       );
 
-      // Two tokens come back within 4 seconds. One is for the attempt below, and the other one is for the check of
-      // the login of a run that starts right after this one.
-      await delay(4100);
+      // The bucket is empty now, and a page of another site still cannot use it up. The check of the origin refuses
+      // its POST before the limit counts it, and the GET of its images does not count.
+      const crossSite = await login('not the password', { 'sec-fetch-site': 'cross-site' });
+      expect(crossSite.status === 403, `expected 403 for a POST from another site, got ${crossSite.status}`);
+      const get = await fetch(`${gateway}/api/auth/login`);
+      expect(get.status !== 429, 'expected a GET not to count toward the limit');
+
+      // Two tokens come back a little after two fill intervals. One is for the attempt below, and the other one is
+      // for the check of the login of a run that starts right after this one.
+      await delay(2 * loginBucket.fillIntervalMs + 100);
       const after = await login('not the password');
       expect(after.status === 401, `expected 401 once the limit lifts, got ${after.status}`);
       return;
@@ -187,7 +199,7 @@ async function expectLoginRateLimit() {
     expect(response.status === 401, `expected 401 or 429, got ${response.status}`);
   }
 
-  throw new Error('the gateway did not limit 100 attempts');
+  throw new Error(`the gateway did not limit ${maxAttempts} attempts`);
 }
 
 // Opens a Socket.IO connection by hand. The server sends the open packet of Engine.IO,
