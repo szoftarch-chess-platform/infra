@@ -36,12 +36,6 @@ The contracts between the services, which [ADR-7](adr/contracts.md) and [ADR-8](
 | [ADR-9](adr/chess-rules.md) | chess.js for the rules of chess | frontend, game-service |
 | [ADR-10](adr/live-game.md) | Rules of a live game | frontend, game-service, platform-service |
 
-## Open questions of infra
-
-- The open question of [ADR-3](adr/api-gateway.md) on the size of the rate limit of the sign-in.
-- How compose waits until the platform-service is ready, because its chiseled image has no shell for a health check.
-
 ## Next steps of infra
 
 - Lint the contracts in a CI workflow for every pull request that changes `contracts/` (ADR-7).
-- Answer the open question of ADR-3 on the size of the rate limit, and add the rate limit of the sign-in to the gateway.

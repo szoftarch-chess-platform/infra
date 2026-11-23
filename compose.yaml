@@ -44,7 +44,7 @@ services:
       game-service:
         condition: service_healthy
       platform-service:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       # The image has no curl or wget, so bash asks the admin interface directly.
       test:
@@ -63,7 +63,6 @@ services:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
       <<: *healthcheck-timing
 
-  # The image has no shell, so it has no health check here.
   platform-service:
     image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
     environment:
@@ -92,6 +91,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      # The image has no shell or curl, so the health probe of the image asks for the readiness of the service.
+      test: ["CMD", "./health-probe/PlatformService.HealthProbe", "http://127.0.0.1:8080/health/ready"]
+      <<: *healthcheck-timing
 
   # Applies the migrations of the platform-service once and exits, before the service starts.
   platform-migrations:
