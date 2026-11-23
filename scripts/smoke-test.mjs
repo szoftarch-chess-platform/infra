@@ -104,6 +104,7 @@ function finishedGameEvent() {
 }
 
 // Publishes an event with rabbitmqadmin in the RabbitMQ container, as the README describes for a test event.
+// It resolves to routed, to unrouted when no queue got the event, or to missing when the exchange does not exist.
 function publishEvent(event) {
   const properties = { delivery_mode: 2, content_type: 'application/json', message_id: event.id, type: event.type };
   const args = ['compose', 'exec', '-T', 'rabbitmq', 'rabbitmqadmin', '--non-interactive', 'publish', 'message',
@@ -117,16 +118,32 @@ function publishEvent(event) {
     child.stderr.on('data', (chunk) => (output += chunk));
     child.on('error', (error) => reject(new Error(`could not run docker: ${error.message}`)));
     child.on('close', (code) => {
-      if (code !== 0) {
+      if (output.includes('404 Not Found')) {
+        resolve('missing');
+      } else if (code !== 0) {
         reject(new Error(`rabbitmqadmin failed: ${output.trim()}`));
-      } else if (!output.includes('routed successfully')) {
-        reject(new Error(`no queue got the event: ${output.trim()}`));
       } else {
-        resolve();
+        resolve(output.includes('routed successfully') ? 'routed' : 'unrouted');
       }
     });
     child.stdin.end(JSON.stringify(event));
   });
+}
+
+// Right after a start the game-service may not have declared the exchange yet, and the platform-service may not have
+// bound its queue, because a consumer repeats its binding until the sender has declared the exchange (ADR-6). Both
+// try again every 5 seconds, so this check waits twice as long as the others. RabbitMQ drops an event that no queue
+// gets, so the event is published again until a queue gets it, and the platform-service gets it once.
+async function publishUntilRouted(event, deadline = Date.now() + 2 * timeoutSeconds * 1000) {
+  const result = await publishEvent(event);
+  if (result === 'routed') {
+    return;
+  }
+
+  const reason = result === 'missing' ? 'the exchange game.events does not exist' : 'no queue got the event';
+  expect(Date.now() < deadline, `${reason} after ${2 * timeoutSeconds} seconds`);
+  await delay(500);
+  return publishUntilRouted(event, deadline);
 }
 
 // Waits until the game is in the history of the user, which takes a moment after the event is published.
@@ -309,7 +326,7 @@ const checks = [
     'a finished game on RabbitMQ reaches the history',
     async () => {
       const event = finishedGameEvent();
-      await publishEvent(event);
+      await publishUntilRouted(event);
       await waitForGame(event.data.gameId);
     },
   ],

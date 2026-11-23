@@ -69,9 +69,9 @@ The development override publishes these ports, which only the local machine rea
 
 | Address | Service |
 |---|---|
-| `127.0.0.1:5432` | PostgreSQL, with the user `postgres` and the password `POSTGRES_PASSWORD` of `.env`, or on the database platform with the user `platform` and the password `PLATFORM_DB_PASSWORD` |
-| `127.0.0.1:5672` | AMQP of RabbitMQ, with the user `game-service` and the password `GAME_RABBITMQ_PASSWORD` of `.env`, or the user `platform-service` and the password `PLATFORM_RABBITMQ_PASSWORD` |
-| `127.0.0.1:6379` | Redis, with the user `game-service` and the password `GAME_REDIS_PASSWORD` of `.env` |
+| `127.0.0.1:5432` | PostgreSQL, with the user `postgres` and the password `POSTGRES_ADMIN_PASSWORD` of `.env`, or on the database platform with the user `platform` and the password `POSTGRES_PLATFORM_PASSWORD` |
+| `127.0.0.1:5672` | AMQP of RabbitMQ, with the user `game-service` and the password `RABBITMQ_GAME_PASSWORD` of `.env`, or the user `platform-service` and the password `RABBITMQ_PLATFORM_PASSWORD` |
+| `127.0.0.1:6379` | Redis, with the user `game-service` and the password `REDIS_GAME_PASSWORD` of `.env` |
 | http://127.0.0.1:8000 | engine-service |
 | http://127.0.0.1:15672 | web management interface of RabbitMQ, with the user `admin` and the password `RABBITMQ_ADMIN_PASSWORD` of `.env` |
 
@@ -94,7 +94,7 @@ docker compose down --volumes
 
 ### Running a service on the host
 
-A service runs on the host, for example with the hot reload of its dev server, against the addresses above. It listens on the same port as in its container, which is 8080 for the platform-service and 3001 for the game-service, and only on `127.0.0.1`. The platform-service needs PostgreSQL and RabbitMQ, and the game-service needs Redis, RabbitMQ and the engine-service. The README of the service describes its settings.
+A service runs on the host, for example with the hot reload of its dev server, against the addresses above. It listens on the same port as in its container, which is 8080 for the platform-service and 3001 for the game-service, and only on `127.0.0.1`. The platform-service needs PostgreSQL and RabbitMQ, and the game-service needs Redis, RabbitMQ and the engine-service. `scripts/dev-setup.mjs` writes the settings of the service from the template of its repo, as the Configuration section describes, so run it again after a pull that changes the template. The README of the service describes its settings.
 
 To reach it through the gateway, add the override file of the service to `COMPOSE_FILE` in `.env`.
 
@@ -152,14 +152,23 @@ Compose reads its variables from `.env`, and every one of them is required.
 | `COMPOSE_FILE`, `COMPOSE_PATH_SEPARATOR` | compose files that every `docker compose` command loads |
 | `FRONTEND_TAG`, `GAME_SERVICE_TAG`, `ENGINE_SERVICE_TAG`, `PLATFORM_SERVICE_TAG` | image tag of each service |
 | `GATEWAY_PORT` | host port of the gateway |
-| `POSTGRES_PASSWORD` | password of the postgres superuser |
-| `PLATFORM_DB_PASSWORD` | password of the database user of the platform-service |
-| `GAME_REDIS_PASSWORD` | password of the Redis user of the game-service |
-| `RABBITMQ_ADMIN_PASSWORD` | password of the admin user of RabbitMQ |
-| `GAME_RABBITMQ_PASSWORD` | password of the RabbitMQ user of the game-service |
-| `PLATFORM_RABBITMQ_PASSWORD` | password of the RabbitMQ user of the platform-service |
+| `POSTGRES_ADMIN_PASSWORD` | password of the PostgreSQL superuser `postgres` |
+| `POSTGRES_PLATFORM_PASSWORD` | password of the PostgreSQL user `platform` of the platform-service |
+| `REDIS_GAME_PASSWORD` | password of the Redis user `game-service` |
+| `RABBITMQ_ADMIN_PASSWORD` | password of the RabbitMQ user `admin` |
+| `RABBITMQ_GAME_PASSWORD` | password of the RabbitMQ user `game-service` |
+| `RABBITMQ_PLATFORM_PASSWORD` | password of the RabbitMQ user `platform-service` |
+
+The name of a password is the name of the data store followed by the user. The user names are fixed in the configuration files of the data stores.
 
 `scripts/dev-setup.mjs` copies .env.example to .env and fills the empty passwords with random values. To an existing .env it adds the variables of .env.example that it lacks, so run the script again after every pull that changes .env.example. It creates only the files that are missing in the secrets folder. To renew a key, the certificate or `.env`, delete it and run the script again.
+
+The script also writes the settings of the services that run on the host, from a template in the repo of each service. A placeholder such as `<REDIS_GAME_PASSWORD>` in a template stands for the variable of `.env` with that name, and `<JWT_SIGNING_KEY_PATH>` for the absolute path of `secrets/jwt/private-key.pem`. These settings are derived from `.env`, so the script writes them again at every run, and a change by hand is lost. It skips a service whose folder or template is missing.
+
+| Service | Template | Result |
+|---|---|---|
+| game-service | `.env.example` | `.env`, next to which `.env.local` holds values of your own |
+| platform-service | `user-secrets.template.json` | the user secrets of `src/PlatformService.Api` with `dotnet user-secrets`, which needs the .NET SDK. The other user secrets stay. |
 
 The passwords of the database and the users of RabbitMQ with their passwords and permissions take effect only on an empty data volume. To apply a change of the users in `rabbitmq/rabbitmq.conf` or of a RabbitMQ password, delete the volume of RabbitMQ and start everything again. The messages in its queues are lost.
 ```bash
@@ -231,7 +240,7 @@ infra/
 │   ├── rabbitmq.conf         # users of RabbitMQ with their permissions, and the import of definitions.json
 │   └── definitions.json      # default virtual host and the policies of the queues
 ├── scripts/
-│   ├── dev-setup.mjs         # creates the keys, the certificate and .env
+│   ├── dev-setup.mjs         # creates the keys, the certificate and .env, and writes the settings of the services on the host
 │   └── smoke-test.mjs        # checks the paths through the gateway
 ├── secrets/                  # keys and certificates, outside version control
 └── docs/                     # system documentation

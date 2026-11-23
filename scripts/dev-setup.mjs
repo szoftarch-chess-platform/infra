@@ -5,6 +5,9 @@
 // The script creates only what is missing, and it adds the variables of .env.example that an
 // existing .env lacks. To renew a file, delete it and run the script again.
 //
+// It also writes the settings of the services that run on the host, which it derives from .env,
+// so it writes them again at every run.
+//
 // Usage: node scripts/dev-setup.mjs
 
 import { spawnSync } from 'node:child_process';
@@ -12,8 +15,12 @@ import { createHash, createPublicKey, generateKeyPairSync, randomBytes } from 'n
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// A placeholder of a template of a service, which stands for the value of the variable NAME.
+const PLACEHOLDER = /<([A-Z][A-Z0-9_]*)>/g;
 
 // OpenSSL runs in a container, so the host needs no OpenSSL of its own.
 const OPENSSL_IMAGE = 'alpine:3.24';
@@ -61,14 +68,18 @@ function path(...parts) {
   return join(root, ...parts);
 }
 
-function write(target, content) {
+function write(target, content, verb = 'created') {
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, content);
-  console.log(`created ${relative(root, target)}`);
+  console.log(`${verb.padEnd(7)} ${relative(root, target)}`);
 }
 
 function keep(target) {
   console.log(`kept    ${relative(root, target)}`);
+}
+
+function skip(what, reason) {
+  console.log(`skipped ${what}, because ${reason}`);
 }
 
 function fail(message) {
@@ -170,6 +181,100 @@ function createEnvFile() {
   console.log(`added   ${missing.map((match) => match[1]).join(', ')} to ${relative(root, envPath)}`);
 }
 
+// The path of a file in the repo of a service, which is a sibling folder of infra.
+function servicePath(repo, ...parts) {
+  return join(root, '..', repo, ...parts);
+}
+
+// Reads the template of a service, or returns undefined when its repo or the template is missing.
+function readTemplate(repo, name, what) {
+  const templatePath = servicePath(repo, name);
+  if (!existsSync(templatePath)) {
+    skip(what, `${relative(root, templatePath)} is missing`);
+    return undefined;
+  }
+
+  return readFileSync(templatePath, 'utf8');
+}
+
+// Replaces every placeholder of the template with its value, which encode prepares for the format of the template.
+function fillTemplate(template, values, source, encode = (value) => value) {
+  return template.replace(PLACEHOLDER, (placeholder, name) => {
+    if (!values[name]) {
+      fail(`${source} has the placeholder ${placeholder}, but it has no value.`);
+    }
+
+    return encode(values[name]);
+  });
+}
+
+// The game-service reads .env, and the template of its repo is .env.example.
+function writeGameServiceSettings(values) {
+  const what = 'the settings of the game-service';
+  const template = readTemplate('game-service', '.env.example', what);
+  if (template === undefined) {
+    return;
+  }
+
+  const eol = template.includes('\r\n') ? '\r\n' : '\n';
+  const header = [
+    '# Written by scripts/dev-setup.mjs of the infra repo from .env.example at every run, so a change here is lost.',
+    '# Values of your own go into .env.local, which wins over this file.',
+  ].join(eol);
+  const settings = fillTemplate(template, values, relative(root, servicePath('game-service', '.env.example')));
+  write(servicePath('game-service', '.env'), `${header}${eol}${settings}`, 'wrote');
+}
+
+// The platform-service reads the user secrets of .NET in Development, and the template of its repo is a JSON file
+// with the same structure as appsettings.json. The secrets that the template lacks stay as they are.
+function setPlatformServiceSecrets(values) {
+  const what = 'the user secrets of the platform-service';
+  const template = readTemplate('platform-service', 'user-secrets.template.json', what);
+  if (template === undefined) {
+    return;
+  }
+
+  // The values go into JSON strings, so their backslashes and quotes are escaped.
+  const secrets = fillTemplate(
+    template,
+    values,
+    relative(root, servicePath('platform-service', 'user-secrets.template.json')),
+    (value) => JSON.stringify(value).slice(1, -1),
+  );
+
+  // The output of the tool would show the secrets, so only its errors are shown.
+  const project = servicePath('platform-service', 'src', 'PlatformService.Api');
+  const result = spawnSync('dotnet', ['user-secrets', 'set', '--project', project], {
+    input: secrets,
+    encoding: 'utf8',
+    stdio: ['pipe', 'ignore', 'inherit'],
+  });
+  if (result.error?.code === 'ENOENT') {
+    skip(what, 'the .NET SDK is missing');
+    return;
+  }
+  if (result.error) {
+    fail(`Could not run dotnet: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    fail(`Setting ${what} failed.`);
+  }
+  console.log(`set     ${what}`);
+}
+
+// The settings of the services that run on the host. The template of a service is in its repo, and
+// a placeholder <NAME> of it stands for the variable NAME of .env or for a path that the script adds.
+function writeHostSettings() {
+  const values = {
+    ...parseEnv(readFileSync(path('.env'), 'utf8')),
+    JWT_SIGNING_KEY_PATH: path('secrets', 'jwt', 'private-key.pem'),
+  };
+
+  writeGameServiceSettings(values);
+  setPlatformServiceSecrets(values);
+}
+
 createTokenKeys();
 createGatewayCertificate();
 createEnvFile();
+writeHostSettings();
