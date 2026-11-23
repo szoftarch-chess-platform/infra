@@ -156,6 +156,11 @@ docker compose run --rm --no-deps envoy --mode validate -c /etc/envoy/envoy.yaml
 
 In Git Bash start the second command with `MSYS_NO_PATHCONV=1`, otherwise Git Bash rewrites the path of the configuration.
 
+Restart the gateway after a change of envoy/envoy.yaml:
+```bash
+docker compose restart envoy
+```
+
 Check the contracts in `contracts/`:
 ```bash
 npx --yes @redocly/cli@2.82.0 lint --config contracts/redocly.yaml

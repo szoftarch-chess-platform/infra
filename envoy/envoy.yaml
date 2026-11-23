@@ -1,6 +1,7 @@
 # Static configuration of the API gateway.
 # ADR-3 decides the routes, and ADR-4 decides the JWT validation, the identity headers
-# and the Origin check of the WebSocket routes.
+# and the checks of the origin of the WebSocket handshakes and of the requests under /api
+# that change something.
 
 static_resources:
   listeners:
@@ -55,8 +56,9 @@ static_resources:
                             end
                         # A page of another origin must not change anything with the cookies of the user, and
                         # even without them the response of a form of another site could delete the cookies.
-                        # The browser names the origin of the request in Sec-Fetch-Site, and older ones only
-                        # in Origin. A request without both does not come from a browser (ADR-4).
+                        # The browser tells in Sec-Fetch-Site whether the request comes from the same origin,
+                        # and older browsers only name the origin in Origin. A request with neither header
+                        # does not come from a browser (ADR-4).
                         same-origin-unsafe:
                           inline_string: |
                             function envoy_on_request(handle)
