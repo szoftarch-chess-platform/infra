@@ -15,7 +15,7 @@ x-healthcheck-timing: &healthcheck-timing
 
 # The database of the platform-service, for the service and for its migrations.
 x-platform-database: &platform-database
-  ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${PLATFORM_DB_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
+  ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${POSTGRES_PLATFORM_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
 
 services:
   # The only container with a port on the host in this file. compose.dev.yaml adds the ports for development.
@@ -67,7 +67,7 @@ services:
     image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
     environment:
       <<: *platform-database
-      ConnectionStrings__RabbitMq: amqp://platform-service:${PLATFORM_RABBITMQ_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
+      ConnectionStrings__RabbitMq: amqp://platform-service:${RABBITMQ_PLATFORM_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
       Jwt__SigningKeyPath: /run/secrets/jwt-signing-key.pem
     # An error at startup, such as a missing setting, aborts .NET. As process 1 it cannot abort, so it would end
     # with the exit code 139 of a crash. Under an init process it ends with the exit code 134 of an abort.
@@ -113,8 +113,8 @@ services:
     environment:
       PORT: 3001
       HOST: 0.0.0.0
-      REDIS_URL: redis://game-service:${GAME_REDIS_PASSWORD:?set it in .env}@redis:6379
-      RABBITMQ_URL: amqp://game-service:${GAME_RABBITMQ_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
+      REDIS_URL: redis://game-service:${REDIS_GAME_PASSWORD:?set it in .env}@redis:6379
+      RABBITMQ_URL: amqp://game-service:${RABBITMQ_GAME_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
       ENGINE_URL: http://engine-service:8000
     # Node.js does not stop on SIGTERM as process 1, so an init process forwards it.
     init: true
@@ -152,8 +152,8 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
-      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?set it in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set it in .env}
+      POSTGRES_PLATFORM_PASSWORD: ${POSTGRES_PLATFORM_PASSWORD:?set it in .env}
     volumes:
       - postgres-data:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -178,14 +178,14 @@ services:
       - --user
       - game-service
       - "on"
-      - ">${GAME_REDIS_PASSWORD:?set it in .env}"
+      - ">${REDIS_GAME_PASSWORD:?set it in .env}"
       - "~*"
       - "&*"
       - "+@all"
       - "-@admin"
     environment:
       # The password of redis-cli in the health check.
-      REDISCLI_AUTH: ${GAME_REDIS_PASSWORD:?set it in .env}
+      REDISCLI_AUTH: ${REDIS_GAME_PASSWORD:?set it in .env}
     volumes:
       - redis-data:/data
     networks:
@@ -201,8 +201,8 @@ services:
     environment:
       # The passwords of the users that rabbitmq.conf creates.
       RABBITMQ_ADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
-      GAME_RABBITMQ_PASSWORD: ${GAME_RABBITMQ_PASSWORD:?set it in .env}
-      PLATFORM_RABBITMQ_PASSWORD: ${PLATFORM_RABBITMQ_PASSWORD:?set it in .env}
+      RABBITMQ_GAME_PASSWORD: ${RABBITMQ_GAME_PASSWORD:?set it in .env}
+      RABBITMQ_PLATFORM_PASSWORD: ${RABBITMQ_PLATFORM_PASSWORD:?set it in .env}
       # The user of rabbitmqadmin in the container, which sends the test events.
       RABBITMQADMIN_USERNAME: admin
       RABBITMQADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}

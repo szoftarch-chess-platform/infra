@@ -39,6 +39,8 @@ Every piece of information is written down in one place only, and other document
 - The services read their configuration from environment variables, which compose sets. A service can have its own configuration files on top of that.
 - Required settings have no built-in default values. If one is missing, the service stops at startup with an error that names it.
 - Secrets never go into a repo.
+- The passwords of the local setup are only in the `.env` of the infra repo, because infra creates the users of the data stores. A service that runs on the host gets its settings from `scripts/dev-setup.mjs` of infra, which fills a template in the repo of the service. A placeholder `<NAME>` of the template stands for the variable `NAME` of `.env`.
+- The variable of a password is named after the data store and the user, such as `RABBITMQ_GAME_PASSWORD`. The user names are not variables, because `rabbitmq/rabbitmq.conf`, the ACL of Redis in compose and the script in `postgres/init/` bind the permissions to them.
 
 ## Language and writing
 
