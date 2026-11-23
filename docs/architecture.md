@@ -59,6 +59,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     B->>E: login
+    E->>E: limit the attempts of the address
     E->>P: login
     P->>DB: check the password, store the refresh token
     P-->>B: token cookies
@@ -68,7 +69,7 @@ sequenceDiagram
     P-->>B: response
 ```
 
-[ADR-4](adr/authentication.md) decides the tokens, the cookies and the identity headers. The responses travel back through Envoy too.
+[ADR-3](adr/api-gateway.md) decides the rate limit of the sign-in, and [ADR-4](adr/authentication.md) the tokens, the cookies and the identity headers. The responses travel back through Envoy too.
 
 ### Live game against the AI
 

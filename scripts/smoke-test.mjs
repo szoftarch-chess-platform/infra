@@ -156,6 +156,40 @@ async function expectPostStatus(path, headers, status) {
   expect(response.status === status, `expected ${status}, got ${response.status}`);
 }
 
+function login(password) {
+  return fetch(`${gateway}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userName: user.userName, password }),
+  });
+}
+
+// The gateway gives every address 30 attempts at once and then one every 2 seconds (ADR-3). An earlier run may have
+// used some of them, so the check signs in with a wrong password until the gateway refuses.
+async function expectLoginRateLimit() {
+  for (let attempt = 1; attempt <= 100; attempt++) {
+    const response = await login('not the password');
+    await response.text();
+    if (response.status === 429) {
+      expect(
+        !response.headers.get('content-type')?.includes('application/problem+json'),
+        'expected the 429 of the gateway, not of the platform-service',
+      );
+
+      // Two tokens come back within 4 seconds. One is for the attempt below, and the other one is for the check of
+      // the login of a run that starts right after this one.
+      await delay(4100);
+      const after = await login('not the password');
+      expect(after.status === 401, `expected 401 once the limit lifts, got ${after.status}`);
+      return;
+    }
+
+    expect(response.status === 401, `expected 401 or 429, got ${response.status}`);
+  }
+
+  throw new Error('the gateway did not limit 100 attempts');
+}
+
 // Opens a Socket.IO connection by hand. The server sends the open packet of Engine.IO,
 // which starts with 0. The client asks for the default namespace with 40, and the server
 // confirms it with a packet that starts with 40 too.
@@ -213,11 +247,7 @@ const checks = [
   [
     '/api/auth/login without a token reaches the platform-service',
     async () => {
-      const response = await fetch(`${gateway}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userName: user.userName, password: 'not the password' }),
-      });
+      const response = await login('not the password');
       expect(response.status === 401, `expected 401, got ${response.status}`);
       expect(
         response.headers.get('content-type')?.includes('application/problem+json'),
@@ -273,14 +303,19 @@ const checks = [
   ],
 ];
 
+// These checks use up a limit of the gateway that the checks above need, so they run after them.
+const lastChecks = [['/api/auth/login is limited for an address', expectLoginRateLimit]];
+
 console.log(`Smoke test of ${gateway}`);
 
-// The checks do not depend on each other, so they run at the same time.
-const results = await Promise.allSettled(checks.map(async ([, check]) => check()));
+// The checks of a list do not depend on each other, so they run at the same time.
+const run = (list) => Promise.allSettled(list.map(async ([, check]) => check()));
+const results = [...(await run(checks)), ...(await run(lastChecks))];
+const allChecks = [...checks, ...lastChecks];
 
 let failed = 0;
 for (const [index, result] of results.entries()) {
-  const [name] = checks[index];
+  const [name] = allChecks[index];
   if (result.status === 'fulfilled') {
     console.log(`  ok      ${name}`);
     continue;
@@ -293,5 +328,5 @@ for (const [index, result] of results.entries()) {
   console.log(`  FAILED  ${name}: ${reason}`);
 }
 
-console.log(failed === 0 ? 'All checks passed.' : `${failed} of ${checks.length} checks failed.`);
+console.log(failed === 0 ? 'All checks passed.' : `${failed} of ${allChecks.length} checks failed.`);
 process.exit(failed === 0 ? 0 : 1);
