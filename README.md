@@ -161,7 +161,7 @@ Compose reads its variables from `.env`, and every one of them is required.
 
 `scripts/dev-setup.mjs` copies .env.example to .env and fills the empty passwords with random values. To an existing .env it adds the variables of .env.example that it lacks, so run the script again after every pull that changes .env.example. It creates only the files that are missing in the secrets folder. To renew a key, the certificate or `.env`, delete it and run the script again.
 
-The passwords of the database and the users of RabbitMQ with their passwords and permissions take effect only on an empty data volume. To apply a change of `rabbitmq/rabbitmq.conf` or of a RabbitMQ password, delete the volume of RabbitMQ and start everything again. The messages in its queues are lost.
+The passwords of the database and the users of RabbitMQ with their passwords and permissions take effect only on an empty data volume. To apply a change of the users in `rabbitmq/rabbitmq.conf` or of a RabbitMQ password, delete the volume of RabbitMQ and start everything again. The messages in its queues are lost.
 ```bash
 docker compose down
 docker volume rm chess-platform_rabbitmq-data
@@ -228,7 +228,7 @@ infra/
 ├── postgres/
 │   └── init/                 # scripts that run when the database is first created
 ├── rabbitmq/
-│   ├── rabbitmq.conf         # users of RabbitMQ with their permissions
+│   ├── rabbitmq.conf         # users of RabbitMQ with their permissions, and the import of definitions.json
 │   └── definitions.json      # default virtual host and the policies of the queues
 ├── scripts/
 │   ├── dev-setup.mjs         # creates the keys, the certificate and .env
