@@ -68,6 +68,7 @@ services:
     image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
     environment:
       <<: *platform-database
+      ConnectionStrings__RabbitMq: amqp://platform-service:${PLATFORM_RABBITMQ_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
       Jwt__SigningKeyPath: /run/secrets/jwt-signing-key.pem
     # An error at startup, such as a missing setting, aborts .NET. As process 1 it cannot abort, so it would end
     # with the exit code 139 of a crash. Under an init process it ends with the exit code 134 of an abort.
@@ -110,6 +111,8 @@ services:
       PORT: 3001
       HOST: 0.0.0.0
       REDIS_URL: redis://game-service:${GAME_REDIS_PASSWORD:?set it in .env}@redis:6379
+      RABBITMQ_URL: amqp://game-service:${GAME_RABBITMQ_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
+      ENGINE_URL: http://engine-service:8000
     # Node.js does not stop on SIGTERM as process 1, so an init process forwards it.
     init: true
     networks:
@@ -193,17 +196,36 @@ services:
     # The node name contains the host name, and the data directory belongs to the node name.
     hostname: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
+      # The passwords of the users that rabbitmq.conf creates.
+      RABBITMQ_ADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
+      GAME_RABBITMQ_PASSWORD: ${GAME_RABBITMQ_PASSWORD:?set it in .env}
+      PLATFORM_RABBITMQ_PASSWORD: ${PLATFORM_RABBITMQ_PASSWORD:?set it in .env}
+      # The user of rabbitmqadmin in the container, which sends the test events.
+      RABBITMQADMIN_USERNAME: admin
+      RABBITMQADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      # The users, and the policies that RabbitMQ imports at every start.
+      - type: bind
+        source: ./rabbitmq/rabbitmq.conf
+        target: /etc/rabbitmq/rabbitmq.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./rabbitmq/definitions.json
+        target: /etc/rabbitmq/definitions.json
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # The AMQP port accepts connections only once the node can serve the clients, while the ping of
+      # rabbitmq-diagnostics succeeds as soon as the Erlang runtime runs. RabbitMQ calls a TCP check of the AMQP
+      # port the best practice for readiness, and it needs no command line tool that joins the Erlang cluster.
+      test: ["CMD", "nc", "-z", "127.0.0.1", "5672"]
       <<: *healthcheck-timing
-      # The command line tool starts an Erlang VM for every check, so a check gets more time.
-      timeout: 10s
 
 # The default network connects the gateway with the containers behind it.
 # Each data store and the engine has a network of its own with the services that use it.

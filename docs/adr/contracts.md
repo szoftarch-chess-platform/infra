@@ -48,7 +48,7 @@ ADR-2 puts the contracts between the services into the `contracts/` folder of th
 - A consumer starts on an interface only after its contract is merged.
 - Redocly CLI does not check the examples of AsyncAPI documents against their schemas, so the review has to check them.
 - A change of a shared schema affects several contracts, so its pull request needs the review of every owner concerned.
-- To do: the CI workflow of `infra` that lints the contracts, and the instructions for a test event in the README of `infra`.
+- To do: the CI workflow of `infra` that lints the contracts.
 
 ## Sources
 
