@@ -70,6 +70,11 @@ async function expectCurrentUser(headers) {
   expect(body.userName === user.userName, `expected the user name ${user.userName}, got ${body.userName}`);
 }
 
+async function expectPostStatus(path, headers, status) {
+  const response = await fetch(`${gateway}${path}`, { method: 'POST', headers });
+  expect(response.status === status, `expected ${status}, got ${response.status}`);
+}
+
 // Opens a Socket.IO connection by hand. The server sends the open packet of Engine.IO,
 // which starts with 0. The client asks for the default namespace with 40, and the server
 // confirms it with a packet that starts with 40 too.
@@ -138,6 +143,23 @@ const checks = [
         'expected the ProblemDetails of the platform-service',
       );
     },
+  ],
+  // A browser names the origin of a request that changes something, and the gateway refuses another origin.
+  [
+    '/api/auth/logout from another site is rejected',
+    () => expectPostStatus('/api/auth/logout', { 'sec-fetch-site': 'cross-site', origin: 'https://another-origin.example' }, 403),
+  ],
+  [
+    '/api/auth/logout from another origin of the same site is rejected',
+    () => expectPostStatus('/api/auth/logout', { 'sec-fetch-site': 'same-site', origin: 'https://localhost:1' }, 403),
+  ],
+  [
+    '/api/auth/logout from another origin without Sec-Fetch-Site is rejected',
+    () => expectPostStatus('/api/auth/logout', { origin: 'https://another-origin.example' }, 403),
+  ],
+  [
+    '/api/auth/logout from the own origin reaches the platform-service',
+    () => expectPostStatus('/api/auth/logout', { 'sec-fetch-site': 'same-origin', origin: gateway }, 204),
   ],
   [
     '/ws/game without a token is rejected',

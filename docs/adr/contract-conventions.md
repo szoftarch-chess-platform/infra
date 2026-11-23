@@ -12,7 +12,7 @@ The contracts are read and written in three languages. If every contract had its
 - **Missing values:** a field without a value is left out, and `null` is not sent. A reader treats `null` like a missing field.
 - **Times:** a timestamp is an RFC 3339 string. The writer sends it in UTC, and the reader accepts any offset. A duration is an integer number of milliseconds, and its name ends in `Ms`.
 - **Ids:** UUIDs in lowercase canonical form. The ids of the users come from ADR-4. The game-service creates the id of a game as a UUID v7 when the game starts, and the id of an event is a UUID v7 too.
-- **Errors of the HTTP APIs:** ProblemDetails of RFC 9457 in `application/problem+json`. The 401 of the gateway for a missing or invalid token and its 429 of the rate limit have no specified body.
+- **Errors of the HTTP APIs:** ProblemDetails of RFC 9457 in `application/problem+json`. The 401 of the gateway for a missing or invalid token, its 403 for a request from another origin and its 429 of the rate limit have no specified body.
 - **Errors of Socket.IO:** the acknowledgement of a client event is `{ "ok": true, … }` or `{ "ok": false, "error": { "code": …, "message": … } }`. The `code` is a value from the list of the contract, and the `message` is English text for the logs.
 - **Position:** FEN with all six fields.
 - **Move:** UCI notation, which is the start square and the target square, such as `e2e4`. A promotion adds the new piece in lowercase, such as `e7e8q`, and castling is the move of the king, such as `e1g1`. A move history is the list of its UCI moves in order. SAN does not appear in the contracts.

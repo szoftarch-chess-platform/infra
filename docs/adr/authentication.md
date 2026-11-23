@@ -1,6 +1,6 @@
 # ADR-4: Authentication with JWT validation in the gateway
 
-**Related:** F-1, NF-1, X-7, [ADR-3](api-gateway.md), [ADR-5](database.md), [ADR-10](live-game.md)
+**Related:** F-1, NF-1, NF-7, X-7, [ADR-3](api-gateway.md), [ADR-5](database.md), [ADR-10](live-game.md)
 
 ## Context
 
@@ -24,6 +24,7 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - **Trust:** the services that the clients use can only be reached through the gateway, and of the `x-user-*` headers they read only `x-user-id` and `x-user-name`.
 - **WebSocket:** the token travels in the cookie, and with Socket.IO not in the `auth` field either, because otherwise the gateway does not see it.
 - **Origin check:** the gateway rejects a WebSocket handshake whose `Origin` header differs from the address that the request was sent to, which is `https://` followed by the `Host` header. A handshake without an `Origin` header passes.
+- **Cross-origin requests:** on the routes under `/api` the gateway answers 403 to a request with another method than GET, HEAD and OPTIONS that a browser sends from another origin. If the request has a `Sec-Fetch-Site` header, only `same-origin` and `none` pass. Without it the `Origin` header has to name the address that the request was sent to, as for a WebSocket handshake. A request with neither header does not come from a browser and passes.
 
 ## Rationale
 
@@ -51,6 +52,9 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - The browser sends the cookie with a WebSocket handshake too, and no same-origin rule stops a page from opening a WebSocket to another address. `SameSite=Strict` does not cover every case, because a page on another port of the same host or on a sibling subdomain counts as the same site. The browser sets the `Origin` header of the handshake, and a page cannot change it.
 - The check compares the header with the address of the request itself, so it needs no setting that differs between the environments. A client that is not a browser sends no `Origin` header, and it holds no cookie that a foreign page could misuse.
 - The check is in the gateway next to the JWT validation, so it covers every WebSocket route, and a foreign handshake does not reach the game-service.
+- `SameSite=Strict` keeps the cookies from the requests of another site, but not from its responses. A browser stores a cookie with any `SameSite` value from the response to a navigation of the whole page, so a form of another site that posts to the logout or to the refresh would delete both cookies with the response. A page on another port or on a sibling subdomain is the same site, so its form even sends the cookies, and it could really sign the user out.
+- The browser sets `Sec-Fetch-Site`, and a page cannot change it. The OWASP CSRF Prevention Cheat Sheet names it the primary signal for an application that targets only modern browsers, with the `Origin` header as the fallback. The browsers of NF-7 have sent it since July 2021, and every widespread browser since March 2023. Go implements the same rules in `CrossOriginProtection`.
+- The rule needs no token and no change in the clients, and it covers every endpoint under `/api`, also the ones that come later.
 
 ## Rejected alternatives
 
@@ -69,10 +73,15 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - **Non-ASCII user name as raw UTF-8 in the header:** Kestrel rejects it by default, Node reads it as Latin-1, and even after changing that every component would have to handle it the same way.
 - **`Origin` check in the game-service:** the `allowRequest` setting of Socket.IO could do it in a few lines, but it would be a second validation point, and every Socket.IO path would need it.
 - **List of allowed origins in the configuration of the gateway:** it would have to be set for every environment, and a wrong value locks the browsers out.
+- **`SameSite=Lax`:** it is weaker than `Strict`, because it sends the cookies with a navigation from another site, and it does not keep a response from setting cookies either.
+- **Deleting only the cookies that the request carried:** it stops a form of another site, but a page of the same site sends the cookies and could still sign the user out.
+- **The CSRF filter of Envoy:** it would need no script, but it reads only the `Origin` header and without it the `Referer` header, never `Sec-Fetch-Site`. It also rejects a request with neither header, so every client that is not a browser, such as the smoke test, would have to send an `Origin` header.
+- **A required custom header or a CSRF token:** both work, but the frontend would have to send them with every request that changes something, and a token needs state or a cookie of its own.
+- **Letting `same-site` pass, as the Resource Isolation Policy of web.dev does:** a page on a sibling subdomain or on another port would pass, which is exactly the case that `SameSite` misses.
 
 ## Consequences
 
-- The `Origin` check is a short Lua script in the configuration of the gateway. A proxy in front of the gateway, such as the dev server of the frontend, has to forward the `Host` header unchanged, otherwise the gateway rejects the handshake.
+- The two checks of the origin are short Lua scripts in the configuration of the gateway. A proxy in front of the gateway, such as the dev server of the frontend, has to forward the `Host` and the `Sec-Fetch-Site` headers unchanged, otherwise the gateway rejects the handshake and the requests that change something.
 - The gateway is a critical component. A broken configuration affects every service.
 - The list of identity headers is a contract between the gateway and the services. A new header needs the `claim_to_headers` setting of Envoy and the services that read it to be extended at the same time.
 - Every service handles the user id as a UUID. The time of the registration can be read from the id.
@@ -80,7 +89,6 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - A refresh within the grace window can leave several valid refresh tokens in one session for a while. Each of them expires after 7 days, and logout revokes all of them.
 - The gateway checks a WebSocket connection only when it is opened, so an open connection can outlive the expiry of the access token and the logout. On logout the frontend closes the connection.
 - Because of the `Secure` and `__Host-` cookies, local development runs on HTTPS too, including the dev server of the frontend.
-- To do: the refresh with its rotation, the grace window and the reuse detection, and the logout go into the platform-service.
 
 ## Sources
 
@@ -103,5 +111,12 @@ Both the REST requests and the WebSocket connections have to be authenticated, b
 - RFC 9110, Field Values: https://www.rfc-editor.org/rfc/rfc9110#section-5.5
 - MDN, Set-Cookie and cookie prefixes: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie
 - RFC 6455, The WebSocket Protocol, Origin Considerations: https://www.rfc-editor.org/rfc/rfc6455#section-10.2
+- RFC 6265bis, the storage model of cookies, where a navigation of the whole page sets cookies with any `SameSite` value: https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html#name-storage-model
+- OWASP CSRF Prevention Cheat Sheet, Fetch Metadata headers: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html
+- MDN, Sec-Fetch-Site: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Site
+- Go, `CrossOriginProtection`: https://pkg.go.dev/net/http#CrossOriginProtection
+- Filippo Valsorda, Cross-Site Request Forgery: https://words.filippo.io/csrf/
+- web.dev, the Resource Isolation Policy with Fetch Metadata: https://web.dev/articles/fetch-metadata
 - MDN, Site: https://developer.mozilla.org/en-US/docs/Glossary/Site
 - Envoy Lua filter: https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/lua_filter
+- Envoy CSRF filter: https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/csrf_filter

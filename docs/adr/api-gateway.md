@@ -74,7 +74,7 @@ For local runs a script in `infra` creates a development certificate authority a
 - The admin interface on port 9901 must not be published.
 - The TLS certificate goes to the gateway. Locally the browser warns about it until the developer trusts the development authority. The local certificate is valid for 825 days, and after that the script has to create a new one.
 - TLS ends at the gateway. Behind it the containers talk to each other in plain HTTP on the networks of compose, which do not leave the host.
-- The configuration contains one short Lua script, which checks the `Origin` header on the WebSocket routes. Everything else in it is declarative.
+- The configuration contains two short Lua scripts of ADR-4, which check the origin of the WebSocket handshakes and of the requests under `/api` that change something. Everything else in it is declarative.
 - Envoy does not serve static files, so the frontend container serves the SPA.
 - Everything comes from one origin, so CORS is not needed.
 - The Socket.IO client uses only the WebSocket transport, without long polling. A connection stays on the same game-service instance all along, so no sticky sessions are needed. A client in a restrictive network may fail to connect, because there is no fallback to long polling.
