@@ -1,11 +1,14 @@
 // Checks through the gateway that the paths of the running system work.
 // It needs the files that scripts/dev-setup.mjs creates and the containers of compose.
+// The check of the finished games publishes its event with rabbitmqadmin in the RabbitMQ container.
 //
 // Usage: node scripts/smoke-test.mjs
 
-import { sign } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { randomBytes, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 
@@ -21,6 +24,9 @@ process.loadEnvFile(join(root, '.env'));
 
 const gateway = `https://localhost:${process.env.GATEWAY_PORT}`;
 const cookieName = '__Host-access-token';
+
+// How long a check waits for the system, for example for a Socket.IO answer or a game in the history.
+const timeoutSeconds = 10;
 
 // A user that exists only in the token. The id is a UUID v7.
 const user = { id: '0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f', userName: 'smoke-test' };
@@ -61,6 +67,81 @@ function expect(condition, message) {
   }
 }
 
+// A UUID v7 of RFC 9562, which starts with the milliseconds of the current time.
+function uuidV7() {
+  const bytes = randomBytes(16);
+  bytes.writeUIntBE(Date.now(), 0, 6);
+  bytes[6] = (bytes[6] & 0x0f) | 0x70;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+// The example whiteWonByCheckmate of game-events.asyncapi.yaml with new ids and the current time, so every run
+// checks a new game. Its white player is the user of the token.
+function finishedGameEvent() {
+  const endedAt = new Date();
+  // The game of the example lasted 92.225 seconds.
+  const startedAt = new Date(endedAt.getTime() - 92_225);
+  return {
+    id: uuidV7(),
+    type: 'game.finished.v1',
+    source: 'game-service',
+    time: endedAt.toISOString(),
+    data: {
+      gameId: uuidV7(),
+      variant: 'standard',
+      white: { kind: 'user', userId: user.id, name: 'alice' },
+      black: { kind: 'user', userId: '0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b', name: 'bob' },
+      result: 'whiteWon',
+      reason: 'checkmate',
+      moves: ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'f1c4', 'g8f6', 'h5f7'],
+      timeControl: { initialMs: 600000 },
+      startedAt: startedAt.toISOString(),
+      endedAt: endedAt.toISOString(),
+    },
+  };
+}
+
+// Publishes an event with rabbitmqadmin in the RabbitMQ container, as the README describes for a test event.
+function publishEvent(event) {
+  const properties = { delivery_mode: 2, content_type: 'application/json', message_id: event.id, type: event.type };
+  const args = ['compose', 'exec', '-T', 'rabbitmq', 'rabbitmqadmin', '--non-interactive', 'publish', 'message',
+    '--exchange', 'game.events', '--routing-key', 'game.finished', '--properties', JSON.stringify(properties),
+    '--payload-file', '-'];
+
+  return new Promise((resolve, reject) => {
+    const child = spawn('docker', args, { cwd: root });
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
+    child.on('error', (error) => reject(new Error(`could not run docker: ${error.message}`)));
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`rabbitmqadmin failed: ${output.trim()}`));
+      } else if (!output.includes('routed successfully')) {
+        reject(new Error(`no queue got the event: ${output.trim()}`));
+      } else {
+        resolve();
+      }
+    });
+    child.stdin.end(JSON.stringify(event));
+  });
+}
+
+// Waits until the game is in the history of the user, which takes a moment after the event is published.
+async function waitForGame(gameId, deadline = Date.now() + timeoutSeconds * 1000) {
+  const response = await fetch(`${gateway}/api/games/${gameId}`, { headers: cookie });
+  if (response.status === 200) {
+    return;
+  }
+
+  expect(response.status === 404, `expected 200 or 404, got ${response.status}`);
+  expect(Date.now() < deadline, `the game did not reach the history within ${timeoutSeconds} seconds`);
+  await delay(250);
+  return waitForGame(gameId, deadline);
+}
+
 async function expectCurrentUser(headers) {
   const response = await fetch(`${gateway}/api/users/me`, { headers });
   expect(response.status === 200, `expected 200, got ${response.status}`);
@@ -81,7 +162,7 @@ async function expectPostStatus(path, headers, status) {
 function connectSocketIo(path, headers) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(`${gateway.replace('https', 'wss')}${path}/?EIO=4&transport=websocket`, { headers });
-    const timer = setTimeout(() => finish(new Error('no answer within 10 seconds')), 10_000);
+    const timer = setTimeout(() => finish(new Error(`no answer within ${timeoutSeconds} seconds`)), timeoutSeconds * 1000);
 
     function finish(error) {
       clearTimeout(timer);
@@ -182,6 +263,14 @@ const checks = [
     () => connectSocketIo('/ws/game', { ...cookie, origin: gateway }),
   ],
   ['/ws/spectate connects without a token', () => connectSocketIo('/ws/spectate', {})],
+  [
+    'a finished game on RabbitMQ reaches the history',
+    async () => {
+      const event = finishedGameEvent();
+      await publishEvent(event);
+      await waitForGame(event.data.gameId);
+    },
+  ],
 ];
 
 console.log(`Smoke test of ${gateway}`);

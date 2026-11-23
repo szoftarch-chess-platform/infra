@@ -1,6 +1,6 @@
 # ADR-6: Communication between the services
 
-**Related:** F-2, F-6, NF-3, NF-6, NF-8, NF-9, X-3, X-4, X-6, [ADR-1](microservices.md), [ADR-2](polyrepo.md), [ADR-3](api-gateway.md), [ADR-4](authentication.md), [ADR-5](database.md), [ADR-7](contracts.md), [ADR-8](contract-conventions.md), [ADR-10](live-game.md)
+**Related:** F-2, F-6, NF-3, NF-6, NF-8, NF-9, X-3, X-4, X-6, [ADR-1](microservices.md), [ADR-2](polyrepo.md), [ADR-3](api-gateway.md), [ADR-4](authentication.md), [ADR-5](database.md), [ADR-7](contracts.md), [ADR-8](contract-conventions.md), [ADR-10](live-game.md), PS-ADR-14
 
 ## Context
 
@@ -18,13 +18,15 @@ The two calls get two integration styles.
 - **Move request with synchronous HTTP:** the game-service calls the engine-service directly by its service name in compose, with REST/JSON. The request contains the position in FEN and optionally the variant of the game, and the move comes back in UCI notation. The engine-service answers within the time limit of its contract. The game-service waits five seconds longer than that, and it repeats a failed request once. The engine-service reads no identity headers, and it is on an internal Docker network that it shares only with the game-service. The first version runs one engine instance.
 - **Handover of the game with asynchronous messaging over RabbitMQ:** the game-service publishes the finished game as an event to a durable topic exchange named `game.events` with the routing key `game.finished`. The event carries the result of the game and its full move list. The platform-service consumes it from its own durable quorum queue named `platform.game-finished`, and it acknowledges only after the database transaction has been committed.
 - **Reliable sending with a transactional outbox:** the game-service writes the event to an outbox list in the same Redis transaction in which it closes the game, and it sends the event on from there with publisher confirms and the mandatory flag. If the broker cannot be reached, or it returns the event because no queue is bound to its routing key, the event waits in the outbox. Redis has AOF persistence turned on, so the games in progress and the outbox survive a restart too.
-- **Idempotent consumption:** the platform-service filters out repeated deliveries by the id of the event, and a message that cannot be processed goes to a dead-letter queue after the delivery limit.
+- **Idempotent consumption:** the platform-service filters out repeated deliveries by the id of the event, and a message that cannot be processed goes to a dead-letter queue, an invalid one at once and any other after the delivery limit.
 - **Message format:** JSON with a common envelope of `id` as a UUID, `type` with a version such as `game.finished.v1`, `source`, `time` and `data`. The schemas are written in AsyncAPI among the contracts of `infra`.
 - **Topology:** every service declares what it owns at startup. The sender declares the exchange, and the consumer declares its own queue and binding. The declarations are idempotent. A consumer that starts before the exchange exists repeats its binding until the sender has declared the exchange.
 - **Operation:** RabbitMQ 4.4 runs as one instance in the compose of `infra` from the official `rabbitmq:4.4-management-alpine` image, and every service connects with its own user. Redis 8.8 runs as one instance from the official `redis:8.8-alpine` image. Only the user `game-service` can sign in to Redis, with the password `GAME_REDIS_PASSWORD` of `.env`. It may use every command except the administrative ones of the `@admin` category, and the default user of Redis is turned off.
 - **Networks:** every container joins only the networks that it needs. The gateway, the frontend, the platform-service and the game-service share the default network. Each data store has a network of its own with the services that use it, so PostgreSQL is on the `postgres` network with the platform-service, Redis on the `redis` network with the game-service, and RabbitMQ on the `rabbitmq` network with both. The engine-service stays on its internal `engine` network.
 - **Local development:** only the local development override file publishes ports of RabbitMQ, Redis and the engine-service, and only on `127.0.0.1`. These are AMQP on 5672, the web management interface on 15672, Redis on 6379 and the engine-service on 8000. ADR-5 publishes the port of the database the same way. A port cannot be published from an internal network, so in development the engine-service also joins a network that no other container uses. A service under development runs on the host against these ports, with the same users and permissions as in compose. It listens on the same port as in its container, but only on `127.0.0.1`, and on Linux on the address of the Docker bridge. In the container it listens on every interface. The listen address comes from the configuration of the service, which is `HOST` for the game-service and the engine-service. For each service that the gateway routes to, an override file in `infra` sets its container to zero instances and maps its service name in the gateway container to the host with `host-gateway`, so the gateway reaches the service on the host with the same Envoy configuration.
 - **Permissions:** the names of the exchanges and the queues of a service begin with its prefix, which is `game.` for the game-service and `platform.` for the platform-service. A service may configure, write and read only the resources with its own prefix, and the platform-service may also read `game.events`, which it needs to bind its queue. Every service uses the default virtual host.
+- **Users:** `rabbitmq/rabbitmq.conf` of `infra` creates the users `admin`, `game-service` and `platform-service`, the last two with the permissions above. RabbitMQ replaces every `$(NAME)` in the file with an environment variable of its container, so the passwords come from `RABBITMQ_ADMIN_PASSWORD`, `GAME_RABBITMQ_PASSWORD` and `PLATFORM_RABBITMQ_PASSWORD` of `.env`. RabbitMQ creates these users only when an empty node starts for the first time.
+- **Policies:** the retry behavior of a queue, such as its dead-letter exchange, its delivery limit and its delayed retry, is a policy in `rabbitmq/definitions.json` of `infra`. RabbitMQ imports the file with the default virtual host at every start. The service still declares its queues with their type, its exchanges and its bindings. PS-ADR-14 decides the policy of `platform.game-finished`.
 - **Settings:** the game-service reads the AMQP URI of the broker with its own user from `RABBITMQ_URL`, the URL of Redis with its user from `REDIS_URL` and the address of the engine-service from `ENGINE_URL`. The platform-service reads the AMQP URI from the `ConnectionStrings:RabbitMq` setting. The URIs end in `/%2f`, which names the default virtual host.
 
 ## Rationale
@@ -39,6 +41,9 @@ The two calls get two integration styles.
 - The move request and the events carry the variant, so a new game mode adds only a value of it, which is a compatible change by ADR-7 (ADR-8).
 - The time limit is part of the contract of the engine, so the engine-service chooses its thinking time below it, and the five extra seconds of the game-service cover the network and the work around the search.
 - With the prefixes a service cannot change or read the resources of another service by mistake, and a new queue of the same service needs no new permission.
+- With the interpolation of `rabbitmq.conf` the passwords are only in `.env`, like the passwords of PostgreSQL and Redis, and the files in the repo hold no secret. A missing variable stops RabbitMQ at startup with an error that names it.
+- A node that imports definitions creates no default user, so the admin user is one of the users of `rabbitmq.conf` too.
+- RabbitMQ strongly recommends policies over the arguments of a queue, because the arguments of a declared queue cannot change without deleting the queue, while a policy can change at any time. Only an administrator can set a policy, so the policies are in `infra`. The import at every start applies a changed policy at the next start of RabbitMQ.
 - A service on the host gets the hot reload of its dev server and writes its logs straight to the terminal, while it still uses the images, the users and the permissions of compose, which is the dev/prod parity of the twelve-factor app. A published port listens on every interface by default, and on `127.0.0.1` only the same machine reaches it.
 - Through the override file the browser, the frontend and the smoke test reach the service on the host through the gateway, with the JWT validation and the identity headers of compose. Only the address behind the service name changes, so `envoy.yaml` is the same in every setup.
 - The service takes its port from its configuration and uses the same one on the host and in the container, which is the port binding of the twelve-factor app. So the gateway needs no port for each setup.
@@ -65,6 +70,10 @@ The two calls get two integration styles.
 - **Commands without the `@dangerous` category for the user of Redis:** stricter, but that category also contains `INFO`, which Redis clients such as ioredis send when they connect.
 - **Own Redis and RabbitMQ containers in the README of every service:** no change in `infra`, but the broker would not have the users and the permissions of compose, and the versions of the images would be written in two places.
 - **Call through an internal listener of the gateway:** Envoy would balance the load between several engine instances, but the gateway at the edge would also carry internal traffic. That adds a hop and mixes the external and the internal traffic in one component, while a single engine instance needs no load balancing.
+- **The users in the definitions file:** RabbitMQ recommends the import of definitions at boot to pre-configure a node, but the file reads no environment variables. `dev-setup.mjs` would have to write the passwords or their hashes into a second file, which would have to follow every change of `.env`.
+- **A one-shot container that creates the users with `rabbitmqadmin`:** it would also update an existing node and its passwords, but it is one more container that the services wait for.
+- **`RABBITMQ_DEFAULT_USER` and `RABBITMQ_DEFAULT_PASS`:** they create only one user, and a node that imports definitions does not create it.
+- **The retry behavior as arguments of the queue:** the service would own its whole queue, and its tests would need no copy of the policy, but changing the behavior would mean deleting the queue.
 
 ## Consequences
 
@@ -76,11 +85,9 @@ The two calls get two integration styles.
 - A service that runs on the host while its container runs too has two instances, and two consumers would share the queue of the platform-service. So either the override file of the service removes its container, or only the containers that the service needs are started.
 - On Docker Desktop the gateway reaches a service on the host that listens only on `127.0.0.1`, and the connections arrive from `127.0.0.1`. On Linux a firewall such as ufw may block the Docker networks from the port of the service.
 - A new service that uses a data store joins its network in compose, and a new user of Redis gets an ACL user of its own.
-- To do: the RabbitMQ users of the services with their permissions and the remaining settings above go into the compose of `infra`, and the consumer into the platform-service.
-
-## Open questions
-
-- How the RabbitMQ users get their passwords from `.env`, for example with a definitions file that RabbitMQ imports at boot. A new node that imports definitions creates no default user, so such a file has to contain the admin user too.
+- A new user of RabbitMQ, a changed permission and a changed password take effect only on an empty node, so the volume of RabbitMQ has to be deleted for them, as the README of `infra` describes.
+- A queue whose retry behavior is a policy has no dead-letter exchange on a broker without the definitions of `infra`, so a refused message is lost there. The tests of a service set the same policy themselves.
+- A new queue that needs a dead-letter queue or a delayed retry gets a policy in `rabbitmq/definitions.json`.
 
 ## Sources
 
@@ -89,6 +96,11 @@ The two calls get two integration styles.
 - RabbitMQ publishers, unroutable messages: https://www.rabbitmq.com/docs/publishers#unroutable
 - RabbitMQ quorum queues: https://www.rabbitmq.com/docs/quorum-queues
 - RabbitMQ access control: https://www.rabbitmq.com/docs/access-control
+- RabbitMQ configuration, environment variable interpolation: https://www.rabbitmq.com/docs/configure
+- RabbitMQ configuration schema with the extra default users: https://github.com/rabbitmq/rabbitmq-server/blob/main/deps/rabbit/priv/schema/rabbit.schema
+- RabbitMQ schema definition export and import: https://www.rabbitmq.com/docs/definitions
+- RabbitMQ policies: https://www.rabbitmq.com/docs/policies
+- RabbitMQ dead letter exchanges: https://www.rabbitmq.com/docs/dlx
 - RabbitMQ URI specification: https://www.rabbitmq.com/docs/uri-spec
 - RabbitMQ 4.4 release: https://www.rabbitmq.com/blog/2026/10/20/rabbitmq-4.4-release
 - Transactional outbox pattern: https://microservices.io/patterns/data/transactional-outbox

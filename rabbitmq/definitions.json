@@ -1,0 +1,25 @@
+{
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "policies": [
+    {
+      "vhost": "/",
+      "name": "platform.game-finished",
+      "pattern": "^platform\\.game-finished$",
+      "apply-to": "quorum_queues",
+      "priority": 0,
+      "definition": {
+        "dead-letter-exchange": "platform.game-finished.dlx",
+        "dead-letter-strategy": "at-least-once",
+        "overflow": "reject-publish",
+        "delivery-limit": 20,
+        "delayed-retry-type": "all",
+        "delayed-retry-min": 5000,
+        "delayed-retry-max": 60000
+      }
+    }
+  ]
+}

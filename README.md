@@ -70,7 +70,7 @@ The development override publishes these ports, which only the local machine rea
 | Address | Service |
 |---|---|
 | `127.0.0.1:5432` | PostgreSQL, with the user `postgres` and the password `POSTGRES_PASSWORD` of `.env`, or on the database platform with the user `platform` and the password `PLATFORM_DB_PASSWORD` |
-| `127.0.0.1:5672` | AMQP of RabbitMQ |
+| `127.0.0.1:5672` | AMQP of RabbitMQ, with the user `game-service` and the password `GAME_RABBITMQ_PASSWORD` of `.env`, or the user `platform-service` and the password `PLATFORM_RABBITMQ_PASSWORD` |
 | `127.0.0.1:6379` | Redis, with the user `game-service` and the password `GAME_REDIS_PASSWORD` of `.env` |
 | http://127.0.0.1:8000 | engine-service |
 | http://127.0.0.1:15672 | web management interface of RabbitMQ, with the user `admin` and the password `RABBITMQ_ADMIN_PASSWORD` of `.env` |
@@ -126,6 +126,23 @@ Without the gateway it is enough to start the containers that the service needs,
 docker compose up -d --wait redis rabbitmq engine-service
 ```
 
+### Sending a test event
+
+A test event goes to RabbitMQ through `rabbitmqadmin` in its container, with the payload of an example of `contracts/game-events.asyncapi.yaml` in JSON. Save the payload into a file such as `event.json`, and publish it with the properties that the contract requires:
+```bash
+docker compose exec -T rabbitmq rabbitmqadmin publish message \
+  --exchange game.events --routing-key game.finished \
+  --properties '{"delivery_mode": 2, "content_type": "application/json", "message_id": "<id of the event>", "type": "game.finished.v1"}' \
+  --payload-file - < event.json
+```
+
+The game-service declares the `game.events` exchange when it starts. Without the game-service declare it yourself:
+```bash
+docker compose exec rabbitmq rabbitmqadmin declare exchange --name game.events --type topic --durable true
+```
+
+The platform-service puts an event that it cannot process into the queue `platform.game-finished.dlq`, which the web management interface shows. The smoke test sends the example `whiteWonByCheckmate` the same way.
+
 ### Configuration
 
 Compose reads its variables from `.env`, and every one of them is required.
@@ -139,8 +156,22 @@ Compose reads its variables from `.env`, and every one of them is required.
 | `PLATFORM_DB_PASSWORD` | password of the database user of the platform-service |
 | `GAME_REDIS_PASSWORD` | password of the Redis user of the game-service |
 | `RABBITMQ_ADMIN_PASSWORD` | password of the admin user of RabbitMQ |
+| `GAME_RABBITMQ_PASSWORD` | password of the RabbitMQ user of the game-service |
+| `PLATFORM_RABBITMQ_PASSWORD` | password of the RabbitMQ user of the platform-service |
 
-`scripts/dev-setup.mjs` copies .env.example to .env and fills the empty passwords with random values. To an existing .env it adds the variables of .env.example that it lacks, so run the script again after every pull that changes .env.example. It creates only the files that are missing in the secrets folder. To renew a key, the certificate or `.env`, delete it and run the script again. The database passwords take effect only on an empty data volume.
+`scripts/dev-setup.mjs` copies .env.example to .env and fills the empty passwords with random values. To an existing .env it adds the variables of .env.example that it lacks, so run the script again after every pull that changes .env.example. It creates only the files that are missing in the secrets folder. To renew a key, the certificate or `.env`, delete it and run the script again.
+
+The passwords of the database and the users of RabbitMQ with their passwords and permissions take effect only on an empty data volume. To apply a change of the users in `rabbitmq/rabbitmq.conf` or of a RabbitMQ password, delete the volume of RabbitMQ and start everything again. The messages in its queues are lost.
+```bash
+docker compose down
+docker volume rm chess-platform_rabbitmq-data
+docker compose up -d --wait
+```
+
+RabbitMQ imports the policies of `rabbitmq/definitions.json` at every start, so a change of them needs only a restart:
+```bash
+docker compose restart rabbitmq
+```
 
 ### Checking the config files
 
@@ -196,6 +227,9 @@ infra/
 │   └── envoy.yaml            # configuration of the gateway
 ├── postgres/
 │   └── init/                 # scripts that run when the database is first created
+├── rabbitmq/
+│   ├── rabbitmq.conf         # users of RabbitMQ with their permissions, and the import of definitions.json
+│   └── definitions.json      # default virtual host and the policies of the queues
 ├── scripts/
 │   ├── dev-setup.mjs         # creates the keys, the certificate and .env
 │   └── smoke-test.mjs        # checks the paths through the gateway
