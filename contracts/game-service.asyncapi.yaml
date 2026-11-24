@@ -16,8 +16,10 @@ info:
 
     Every event carries exactly one argument, a JSON object. The client sends every event with an
     acknowledgement callback, for example with `emitWithAck`, and the acknowledgement is either
-    `accepted`, `rejected` or the answer that the operation names. Every connection of a user gets
-    the events of the game of the user, and a user can send events from any of them.
+    `accepted`, `rejected` or the answer that the operation names. The acknowledgement and the events
+    that the operation causes, such as `gameStarted` after `joinQueue` or `moveMade` after `makeMove`,
+    can arrive in any order. Every connection of a user gets the events of the game of the user, and a
+    user can send events from any of them.
 
 
     The spectators of X-7 will use the separate `/ws/spectate` path, which this document does not cover.
@@ -87,7 +89,9 @@ operations:
     action: receive
     title: Leave the queue
     summary: The user stops waiting for an opponent.
-    description: The event is rejected with `notInQueue`.
+    description: >-
+      The user also leaves the queue when the last connection of the user closes, as ADR-10 decides.
+      The event is rejected with `notInQueue`.
     channel:
       $ref: '#/channels/game'
     messages:
@@ -122,7 +126,7 @@ operations:
     title: Make a move
     summary: The user makes a move in the current game.
     description: >-
-      After the acknowledgement every connection of both players gets `moveMade`, the sender
+      Once the move is accepted, every connection of both players gets `moveMade`, the sender
       included. The event is rejected with `gameNotFound` if the user plays no game with this id,
       with `notYourTurn` or with `illegalMove`.
     channel:
