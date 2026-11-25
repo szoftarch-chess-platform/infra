@@ -1,0 +1,605 @@
+openapi: 3.1.2
+
+info:
+  title: platform-service
+  version: 2.1.0
+  description: >-
+    The REST API of the platform-service through the gateway. ADR-3 decides the routes, ADR-4 the
+    tokens, the cookies and the rules of the accounts, ADR-8 the content and the errors.
+
+
+    The endpoints under `/api/auth` work without a token. Every other endpoint needs the access
+    token, and the gateway answers 401 itself when it is missing, invalid or expired. That 401 has
+    no specified body. After it the client refreshes the tokens as `POST /api/auth/refresh`
+    describes and repeats the request.
+
+
+    The gateway answers 403 to a request with another method than GET, HEAD and OPTIONS that a browser
+    sends from another origin, as ADR-4 decides. That 403 has no specified body.
+
+servers:
+  - url: https://localhost:8443
+    description: Locally through the gateway. Other environments use their own host.
+
+tags:
+  - name: auth
+    description: Registration, sign-in, refresh and sign-out.
+  - name: users
+    description: The signed-in user.
+  - name: games
+    description: The finished games of the signed-in user.
+
+security:
+  - accessTokenCookie: []
+  - bearerToken: []
+
+paths:
+  /api/auth/register:
+    post:
+      tags:
+        - auth
+      operationId: register
+      summary: Register a new user
+      description: Creates the account and signs the user in, so the response sets both token cookies.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              userName: alice
+              email: alice@example.com
+              password: correct horse battery
+      responses:
+        '201':
+          description: The account has been created, and the user is signed in.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/TokenCookies'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+              example:
+                id: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                userName: alice
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
+        '409':
+          description: >-
+            The user name or the email address is already taken. `errors` names the fields that are
+            taken, so the client can show the message next to them.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ConflictProblem'
+              example:
+                title: Conflict
+                status: 409
+                detail: The user name is already taken.
+                errors:
+                  userName:
+                    - The user name is already taken.
+                traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/auth/login:
+    post:
+      tags:
+        - auth
+      operationId: login
+      summary: Sign in
+      description: Signs the user in with the user name and the password, and sets both token cookies.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              userName: alice
+              password: correct horse battery
+      responses:
+        '200':
+          description: The user is signed in.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/TokenCookies'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+              example:
+                id: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                userName: alice
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          description: The user name or the password is wrong. The response does not tell which one.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                title: Unauthorized
+                status: 401
+                detail: The user name or the password is wrong.
+                traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
+        '429':
+          description: The gateway limits the sign-in attempts of an IP address. The response has no specified body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/auth/refresh:
+    post:
+      tags:
+        - auth
+      operationId: refresh
+      summary: Renew the tokens
+      description: >-
+        Replaces the refresh token in the cookie with a new one and issues a new access token. A
+        refresh token that was replaced at most 10 seconds ago still gets new tokens, so parallel
+        refreshes and a lost response do not end the session. A refresh token that was replaced
+        earlier revokes every token of its session.
+
+
+        The tabs of a browser share the cookies, so the client sends one refresh at a time across
+        all of its tabs, for example with the Web Locks API, and the other requests wait for it. A
+        request that waited repeats itself first, and the client refreshes only if it gets 401
+        again.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RefreshTokenCookie'
+      responses:
+        '204':
+          description: Both token cookies are renewed.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/TokenCookies'
+        '401':
+          description: >-
+            The refresh token is missing, unknown, expired or revoked, or it was replaced more than
+            10 seconds ago. The response deletes both cookies, and the user has to sign in again.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/DeletedTokenCookies'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                title: Unauthorized
+                status: 401
+                detail: The session has ended. Sign in again.
+                traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/auth/logout:
+    post:
+      tags:
+        - auth
+      operationId: logout
+      summary: Sign out
+      description: >-
+        Revokes the refresh tokens of the session and deletes both cookies. It succeeds without a
+        valid refresh token too. The access token stays valid until it expires, so the client also
+        closes its WebSocket connection.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RefreshTokenCookie'
+      responses:
+        '204':
+          description: The user is signed out.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/DeletedTokenCookies'
+        '403':
+          $ref: '#/components/responses/GatewayCrossOrigin'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/users/me:
+    get:
+      tags:
+        - users
+      operationId: getCurrentUser
+      summary: Get the signed-in user
+      description: The access token is in an HttpOnly cookie, so this is how the client learns who is signed in.
+      responses:
+        '200':
+          description: The signed-in user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+              example:
+                id: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                userName: alice
+        '401':
+          $ref: '#/components/responses/GatewayUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/games:
+    get:
+      tags:
+        - games
+      operationId: listGames
+      summary: List the finished games of the user
+      description: >-
+        The finished games in which the signed-in user played, ordered by `endedAt` with the newest
+        first. Games that ended at the same time are ordered by their id in descending order, so the
+        pages do not overlap.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: The number of the page, starting at 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          description: The number of games on a page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: One page of the games.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamePage'
+              example:
+                items:
+                  - id: 0193c2cf-3c4d-7e5f-8a6b-7c8d9e0f1a2b
+                    variant: standard
+                    white:
+                      kind: bot
+                      name: Stockfish bot
+                    black:
+                      kind: user
+                      userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                      name: alice
+                    result: whiteWon
+                    reason: resignation
+                    startedAt: '2026-11-20T15:09:30.000Z'
+                    endedAt: '2026-11-20T15:10:05.000Z'
+                  - id: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+                    variant: standard
+                    white:
+                      kind: user
+                      userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                      name: alice
+                    black:
+                      kind: user
+                      userId: 0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b
+                      name: bob
+                    result: whiteWon
+                    reason: checkmate
+                    startedAt: '2026-11-20T14:01:40.120Z'
+                    endedAt: '2026-11-20T14:03:12.345Z'
+                page: 1
+                pageSize: 20
+                totalCount: 2
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/GatewayUnauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/games/{gameId}:
+    get:
+      tags:
+        - games
+      operationId: getGame
+      summary: Get a finished game with its moves
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            $ref: './shared-schemas.yaml#/Uuid'
+      responses:
+        '200':
+          description: The game with its moves.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameDetails'
+              example:
+                id: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+                variant: standard
+                white:
+                  kind: user
+                  userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                  name: alice
+                black:
+                  kind: user
+                  userId: 0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b
+                  name: bob
+                result: whiteWon
+                reason: checkmate
+                startedAt: '2026-11-20T14:01:40.120Z'
+                endedAt: '2026-11-20T14:03:12.345Z'
+                timeControl:
+                  initialMs: 600000
+                moves:
+                  - e2e4
+                  - e7e5
+                  - d1h5
+                  - b8c6
+                  - f1c4
+                  - g8f6
+                  - h5f7
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/GatewayUnauthorized'
+        '404':
+          description: There is no such game, or the signed-in user did not play in it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                title: Not Found
+                status: 404
+                detail: The game does not exist.
+                traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+                correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    accessTokenCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-access-token
+      description: The access token in the cookie that the auth endpoints set.
+    bearerToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: The same access token in the Authorization header, for tests.
+
+  parameters:
+    RefreshTokenCookie:
+      name: __Secure-refresh-token
+      in: cookie
+      required: false
+      description: The refresh token. The browser sends it only to the paths under `/api/auth`.
+      schema:
+        type: string
+
+  headers:
+    TokenCookies:
+      description: >-
+        Sets `__Host-access-token` (`HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900`) and
+        `__Secure-refresh-token` (`HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=604800`),
+        as ADR-4 decides. The Max-Age of a cookie is the lifetime of its token in seconds.
+      schema:
+        type: string
+    DeletedTokenCookies:
+      description: >-
+        Deletes `__Host-access-token` and `__Secure-refresh-token` with the same attributes and an
+        expiry in the past.
+      schema:
+        type: string
+
+  responses:
+    ValidationFailed:
+      description: The request is invalid. `errors` lists the messages by field.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
+          example:
+            title: One or more validation errors occurred.
+            status: 400
+            errors:
+              userName:
+                - The user name must be 3 to 20 characters long.
+              password:
+                - The password must be at least 8 characters long.
+            traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+            correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+    GatewayUnauthorized:
+      description: The gateway found no valid access token. The response has no specified body.
+    GatewayCrossOrigin:
+      description: >-
+        A browser sent the request from another origin, so the gateway rejected it. The response has no
+        specified body.
+    InternalError:
+      description: The service failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            title: An error occurred while processing your request.
+            status: 500
+            traceId: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+            correlationId: 3f9c1d0e-6a7b-4c2d-9e8f-1a2b3c4d5e6f
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - userName
+        - email
+        - password
+      properties:
+        userName:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{3,20}$'
+          description: Unique regardless of case.
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Unique regardless of case. It is not verified. The length counts Unicode code points.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Any characters, without composition rules. The length counts Unicode code points.
+
+    LoginRequest:
+      type: object
+      required:
+        - userName
+        - password
+      properties:
+        userName:
+          type: string
+          minLength: 1
+          description: Matched regardless of case.
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: >-
+            At most as long as at registration, so a longer password is never right. The length
+            counts Unicode code points.
+
+    CurrentUser:
+      type: object
+      required:
+        - id
+        - userName
+      properties:
+        id:
+          $ref: './shared-schemas.yaml#/Uuid'
+        userName:
+          type: string
+
+    GamePage:
+      type: object
+      required:
+        - items
+        - page
+        - pageSize
+        - totalCount
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameSummary'
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+        totalCount:
+          type: integer
+          minimum: 0
+          description: The number of all games of the user.
+
+    GameSummary:
+      type: object
+      required:
+        - id
+        - variant
+        - white
+        - black
+        - result
+        - reason
+        - startedAt
+        - endedAt
+      properties:
+        id:
+          $ref: './shared-schemas.yaml#/Uuid'
+        variant:
+          $ref: './shared-schemas.yaml#/Variant'
+        white:
+          $ref: './shared-schemas.yaml#/Player'
+        black:
+          $ref: './shared-schemas.yaml#/Player'
+        result:
+          $ref: './shared-schemas.yaml#/GameResult'
+        reason:
+          $ref: './shared-schemas.yaml#/GameEndReason'
+        startedAt:
+          $ref: './shared-schemas.yaml#/Timestamp'
+        endedAt:
+          $ref: './shared-schemas.yaml#/Timestamp'
+
+    GameDetails:
+      description: A game with its moves, which the client replays to show the positions.
+      allOf:
+        - $ref: '#/components/schemas/GameSummary'
+        - type: object
+          required:
+            - timeControl
+            - moves
+          properties:
+            timeControl:
+              $ref: './shared-schemas.yaml#/TimeControl'
+            moves:
+              type: array
+              description: Every move of the game in order.
+              items:
+                $ref: './shared-schemas.yaml#/UciMove'
+
+    Problem:
+      description: The ProblemDetails of PS-ADR-5 with the identifiers of the request.
+      allOf:
+        - $ref: './shared-schemas.yaml#/ProblemDetails'
+        - type: object
+          properties:
+            traceId:
+              type: string
+            correlationId:
+              type: string
+
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - errors
+          properties:
+            errors:
+              $ref: '#/components/schemas/FieldErrors'
+
+    ConflictProblem:
+      description: A conflict with the stored data, with the messages by the field that conflicts.
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required:
+            - errors
+          properties:
+            errors:
+              $ref: '#/components/schemas/FieldErrors'
+
+    FieldErrors:
+      type: object
+      description: The messages by the camelCase path of the field.
+      additionalProperties:
+        type: array
+        items:
+          type: string

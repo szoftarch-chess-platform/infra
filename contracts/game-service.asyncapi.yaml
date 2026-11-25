@@ -1,0 +1,549 @@
+asyncapi: 3.1.0
+
+info:
+  title: game-service live games
+  version: 1.0.0
+  description: >-
+    The Socket.IO events of a live game on the `/ws/game` path. ADR-3 decides the path, ADR-7 how
+    this document maps Socket.IO, ADR-8 the content and ADR-10 the rules of the game.
+
+
+    The client uses Socket.IO 4 with the default namespace and the WebSocket transport only. The
+    browser sends the access token in its cookie (ADR-4), and the game-service reads the user from
+    the identity headers of the handshake. If the gateway rejects the handshake, the client gets
+    `connect_error`, refreshes the token once and connects again.
+
+
+    Every event carries exactly one argument, a JSON object. The client sends every event with an
+    acknowledgement callback, for example with `emitWithAck`, and the acknowledgement is either
+    `accepted`, `rejected` or the answer that the operation names. The acknowledgement and the events
+    that the operation causes, such as `gameStarted` after `joinQueue` or `moveMade` after `makeMove`,
+    can arrive in any order. Every connection of a user gets the events of the game of the user, and a
+    user can send events from any of them.
+
+
+    The spectators of X-7 will use the separate `/ws/spectate` path, which this document does not cover.
+
+defaultContentType: application/json
+
+servers:
+  gateway:
+    host: localhost:8443
+    pathname: /ws/game
+    protocol: wss
+    description: Locally through the gateway. Other environments use their own host.
+    security:
+      - $ref: '#/components/securitySchemes/accessTokenCookie'
+
+channels:
+  game:
+    address: /
+    title: Default namespace
+    description: The default namespace of Socket.IO on the `/ws/game` path.
+    messages:
+      joinQueue:
+        $ref: '#/components/messages/joinQueue'
+      leaveQueue:
+        $ref: '#/components/messages/leaveQueue'
+      startBotGame:
+        $ref: '#/components/messages/startBotGame'
+      makeMove:
+        $ref: '#/components/messages/makeMove'
+      resign:
+        $ref: '#/components/messages/resign'
+      getState:
+        $ref: '#/components/messages/getState'
+      accepted:
+        $ref: '#/components/messages/accepted'
+      rejected:
+        $ref: '#/components/messages/rejected'
+      state:
+        $ref: '#/components/messages/state'
+      gameStarted:
+        $ref: '#/components/messages/gameStarted'
+      moveMade:
+        $ref: '#/components/messages/moveMade'
+      gameEnded:
+        $ref: '#/components/messages/gameEnded'
+
+operations:
+  joinQueue:
+    action: receive
+    title: Join the queue
+    summary: The user waits for a random opponent.
+    description: >-
+      When an opponent is found, both users get `gameStarted`. The event is rejected with
+      `alreadyInQueue` or `alreadyInGame`.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/joinQueue'
+    reply:
+      channel:
+        $ref: '#/channels/game'
+      messages:
+        - $ref: '#/channels/game/messages/accepted'
+        - $ref: '#/channels/game/messages/rejected'
+
+  leaveQueue:
+    action: receive
+    title: Leave the queue
+    summary: The user stops waiting for an opponent.
+    description: >-
+      The user also leaves the queue when the last connection of the user closes, as ADR-10 decides.
+      The event is rejected with `notInQueue`.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/leaveQueue'
+    reply:
+      channel:
+        $ref: '#/channels/game'
+      messages:
+        - $ref: '#/channels/game/messages/accepted'
+        - $ref: '#/channels/game/messages/rejected'
+
+  startBotGame:
+    action: receive
+    title: Start a game against the bot
+    summary: The game starts at once, and the user gets `gameStarted`.
+    description: >-
+      If the bot plays white, its first move arrives as `moveMade`. The event is rejected with
+      `alreadyInQueue` or `alreadyInGame`.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/startBotGame'
+    reply:
+      channel:
+        $ref: '#/channels/game'
+      messages:
+        - $ref: '#/channels/game/messages/accepted'
+        - $ref: '#/channels/game/messages/rejected'
+
+  makeMove:
+    action: receive
+    title: Make a move
+    summary: The user makes a move in the current game.
+    description: >-
+      Once the move is accepted, every connection of both players gets `moveMade`, the sender
+      included. The event is rejected with `gameNotFound` if the user plays no game with this id,
+      with `notYourTurn` or with `illegalMove`. A move that comes after the time of the user has run
+      out ends the game on time and is rejected with `gameNotFound`.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/makeMove'
+    reply:
+      channel:
+        $ref: '#/channels/game'
+      messages:
+        - $ref: '#/channels/game/messages/accepted'
+        - $ref: '#/channels/game/messages/rejected'
+
+  resign:
+    action: receive
+    title: Resign
+    summary: The user resigns the current game, and both players get `gameEnded`.
+    description: The event is rejected with `gameNotFound` if the user plays no game with this id.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/resign'
+    reply:
+      channel:
+        $ref: '#/channels/game'
+      messages:
+        - $ref: '#/channels/game/messages/accepted'
+        - $ref: '#/channels/game/messages/rejected'
+
+  getState:
+    action: receive
+    title: Get the state of the user
+    summary: The client asks after every connect whether the user waits or plays, and the position of the game.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/getState'
+    reply:
+      channel:
+        $ref: '#/channels/game'
+      messages:
+        - $ref: '#/channels/game/messages/state'
+        - $ref: '#/channels/game/messages/rejected'
+
+  gameStarted:
+    action: send
+    title: A game has started
+    summary: Every connection of both players gets the new game.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/gameStarted'
+
+  moveMade:
+    action: send
+    title: A move has been made
+    summary: Every connection of both players gets every accepted move, the moves of the bot included.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/moveMade'
+
+  gameEnded:
+    action: send
+    title: A game has ended
+    summary: >-
+      Every connection of both players gets the end of the game. If a move ended it, `moveMade`
+      comes first.
+    channel:
+      $ref: '#/channels/game'
+    messages:
+      - $ref: '#/channels/game/messages/gameEnded'
+
+components:
+  securitySchemes:
+    accessTokenCookie:
+      type: httpApiKey
+      in: cookie
+      name: __Host-access-token
+      description: The access token of ADR-4, which the gateway checks in the handshake.
+
+  messages:
+    joinQueue:
+      name: joinQueue
+      title: Join the queue
+      payload:
+        $ref: '#/components/schemas/Empty'
+      examples:
+        - payload: {}
+
+    leaveQueue:
+      name: leaveQueue
+      title: Leave the queue
+      payload:
+        $ref: '#/components/schemas/Empty'
+      examples:
+        - payload: {}
+
+    startBotGame:
+      name: startBotGame
+      title: Start a game against the bot
+      payload:
+        $ref: '#/components/schemas/Empty'
+      examples:
+        - payload: {}
+
+    makeMove:
+      name: makeMove
+      title: Make a move
+      payload:
+        $ref: '#/components/schemas/MakeMove'
+      examples:
+        - payload:
+            gameId: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+            move: e2e4
+
+    resign:
+      name: resign
+      title: Resign
+      payload:
+        $ref: '#/components/schemas/Resign'
+      examples:
+        - payload:
+            gameId: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+
+    getState:
+      name: getState
+      title: Get the state of the user
+      payload:
+        $ref: '#/components/schemas/Empty'
+      examples:
+        - payload: {}
+
+    accepted:
+      title: Accepted
+      summary: The acknowledgement of an event that the game-service has carried out.
+      payload:
+        $ref: '#/components/schemas/Accepted'
+      examples:
+        - payload:
+            ok: true
+
+    rejected:
+      title: Rejected
+      summary: The acknowledgement of an event that the game-service has refused.
+      payload:
+        $ref: '#/components/schemas/Rejected'
+      examples:
+        - payload:
+            ok: false
+            error:
+              code: illegalMove
+              message: e2e5 is not a legal move.
+
+    state:
+      title: State of the user
+      summary: The acknowledgement of `getState`.
+      payload:
+        $ref: '#/components/schemas/State'
+      examples:
+        - name: playing
+          payload:
+            ok: true
+            queued: false
+            game:
+              gameId: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+              variant: standard
+              white:
+                kind: user
+                userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                name: alice
+              black:
+                kind: user
+                userId: 0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b
+                name: bob
+              timeControl:
+                initialMs: 600000
+              startedAt: '2026-11-20T14:01:40.120Z'
+              moves:
+                - e2e4
+              fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1
+              clock:
+                whiteMs: 596210
+                blackMs: 588400
+                running: black
+        - name: waiting
+          payload:
+            ok: true
+            queued: true
+
+    gameStarted:
+      name: gameStarted
+      title: A game has started
+      payload:
+        $ref: '#/components/schemas/GameStarted'
+      examples:
+        - payload:
+            game:
+              gameId: 0193c2cf-3c4d-7e5f-8a6b-7c8d9e0f1a2b
+              variant: standard
+              white:
+                kind: bot
+                name: Stockfish bot
+              black:
+                kind: user
+                userId: 0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f
+                name: alice
+              timeControl:
+                initialMs: 600000
+              startedAt: '2026-11-20T15:09:30.000Z'
+              moves: []
+              fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+              clock:
+                blackMs: 600000
+
+    moveMade:
+      name: moveMade
+      title: A move has been made
+      payload:
+        $ref: '#/components/schemas/MoveMade'
+      examples:
+        - payload:
+            gameId: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+            move: e7e5
+            fen: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2
+            clock:
+              whiteMs: 596210
+              blackMs: 581950
+              running: white
+
+    gameEnded:
+      name: gameEnded
+      title: A game has ended
+      payload:
+        $ref: '#/components/schemas/GameEnded'
+      examples:
+        - payload:
+            gameId: 0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f
+            result: whiteWon
+            reason: checkmate
+            clock:
+              whiteMs: 571030
+              blackMs: 560480
+
+  schemas:
+    Empty:
+      type: object
+      description: An event without data, which still carries an object for later fields.
+
+    MakeMove:
+      type: object
+      required:
+        - gameId
+        - move
+      properties:
+        gameId:
+          $ref: './shared-schemas.yaml#/Uuid'
+        move:
+          $ref: './shared-schemas.yaml#/UciMove'
+
+    Resign:
+      type: object
+      required:
+        - gameId
+      properties:
+        gameId:
+          $ref: './shared-schemas.yaml#/Uuid'
+
+    Accepted:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          const: true
+
+    Rejected:
+      type: object
+      required:
+        - ok
+        - error
+      properties:
+        ok:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: >-
+                The reason of the refusal. `invalidPayload` means that the argument does not match
+                this contract, and `internalError` that the game-service failed. The operations name
+                the other codes that they use.
+              enum:
+                - invalidPayload
+                - alreadyInQueue
+                - alreadyInGame
+                - notInQueue
+                - gameNotFound
+                - notYourTurn
+                - illegalMove
+                - internalError
+            message:
+              type: string
+              description: English text for the logs, not for the users.
+
+    State:
+      type: object
+      required:
+        - ok
+        - queued
+      properties:
+        ok:
+          type: boolean
+          const: true
+        queued:
+          type: boolean
+          description: Whether the user waits in the queue.
+        game:
+          $ref: '#/components/schemas/GameState'
+
+    GameStarted:
+      type: object
+      required:
+        - game
+      properties:
+        game:
+          $ref: '#/components/schemas/GameState'
+
+    MoveMade:
+      type: object
+      required:
+        - gameId
+        - move
+        - fen
+        - clock
+      properties:
+        gameId:
+          $ref: './shared-schemas.yaml#/Uuid'
+        move:
+          $ref: './shared-schemas.yaml#/UciMove'
+        fen:
+          $ref: './shared-schemas.yaml#/Fen'
+        clock:
+          $ref: '#/components/schemas/Clock'
+
+    GameEnded:
+      type: object
+      required:
+        - gameId
+        - result
+        - reason
+        - clock
+      properties:
+        gameId:
+          $ref: './shared-schemas.yaml#/Uuid'
+        result:
+          $ref: './shared-schemas.yaml#/GameResult'
+        reason:
+          $ref: './shared-schemas.yaml#/GameEndReason'
+        clock:
+          $ref: '#/components/schemas/Clock'
+
+    GameState:
+      type: object
+      description: A game in progress.
+      required:
+        - gameId
+        - variant
+        - white
+        - black
+        - timeControl
+        - startedAt
+        - moves
+        - fen
+        - clock
+      properties:
+        gameId:
+          $ref: './shared-schemas.yaml#/Uuid'
+        variant:
+          $ref: './shared-schemas.yaml#/Variant'
+        white:
+          $ref: './shared-schemas.yaml#/Player'
+        black:
+          $ref: './shared-schemas.yaml#/Player'
+        timeControl:
+          $ref: './shared-schemas.yaml#/TimeControl'
+        startedAt:
+          $ref: './shared-schemas.yaml#/Timestamp'
+        moves:
+          type: array
+          description: Every move so far in order.
+          items:
+            $ref: './shared-schemas.yaml#/UciMove'
+        fen:
+          $ref: './shared-schemas.yaml#/Fen'
+        clock:
+          $ref: '#/components/schemas/Clock'
+
+    Clock:
+      type: object
+      description: >-
+        The remaining time of the users at the moment of sending. The client counts down the
+        running clock from the moment it gets the message. The bot has no clock, so the field of its
+        color is left out, and `running` is left out while the bot thinks and after the end.
+      properties:
+        whiteMs:
+          type: integer
+          minimum: 0
+        blackMs:
+          type: integer
+          minimum: 0
+        running:
+          $ref: './shared-schemas.yaml#/Color'

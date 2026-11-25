@@ -1,0 +1,279 @@
+# Static configuration of the API gateway.
+# ADR-3 decides the routes and the rate limit of the sign-in, and ADR-4 decides the JWT validation,
+# the identity headers and the checks of the origin of the WebSocket handshakes and of the requests
+# under /api that change something.
+
+static_resources:
+  listeners:
+    - name: https
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8443
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                alpn_protocols: [h2, http/1.1]
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/tls/gateway.crt
+                    private_key:
+                      filename: /etc/envoy/tls/gateway.key
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: gateway
+                # The gateway is at the edge, so the client address is the address of the connection.
+                use_remote_address: true
+                normalize_path: true
+                merge_slashes: true
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                http_filters:
+                  # A script runs only on the routes that name it.
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      source_codes:
+                        # A browser sends the Origin header with every WebSocket handshake. A page of
+                        # another origin must not open a connection with the cookie of the user, so the
+                        # header has to name the address that the request was sent to.
+                        same-origin:
+                          inline_string: |
+                            function envoy_on_request(handle)
+                              local headers = handle:headers()
+                              local origin = headers:get("origin")
+                              local own = "https://" .. (headers:get(":authority") or "")
+                              if origin ~= nil and origin:lower() ~= own:lower() then
+                                handle:respond({[":status"] = "403"}, "")
+                              end
+                            end
+                        # A page of another origin must not change anything with the cookies of the user, and
+                        # even without them the response of a form of another site could delete the cookies.
+                        # The browser tells in Sec-Fetch-Site whether the request comes from the same origin,
+                        # and older browsers only name the origin in Origin. A request with neither header
+                        # does not come from a browser (ADR-4).
+                        same-origin-unsafe:
+                          inline_string: |
+                            function envoy_on_request(handle)
+                              local headers = handle:headers()
+                              local method = headers:get(":method")
+                              if method == "GET" or method == "HEAD" or method == "OPTIONS" then
+                                return
+                              end
+                              local site = headers:get("sec-fetch-site")
+                              if site ~= nil then
+                                if site ~= "same-origin" and site ~= "none" then
+                                  handle:respond({[":status"] = "403"}, "")
+                                end
+                                return
+                              end
+                              local origin = headers:get("origin")
+                              local own = "https://" .. (headers:get(":authority") or "")
+                              if origin ~= nil and origin:lower() ~= own:lower() then
+                                handle:respond({[":status"] = "403"}, "")
+                              end
+                            end
+                  # The rate limit is off here and turned on by the routes that configure it. It comes after the
+                  # checks of the origin, so a page of another site cannot use up the attempts of its visitors.
+                  - name: envoy.filters.http.local_ratelimit
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                      stat_prefix: rate_limit
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      providers:
+                        platform-service:
+                          issuer: platform-service
+                          audiences:
+                            - chess-platform
+                          require_expiration: true
+                          local_jwks:
+                            filename: /etc/envoy/jwt/jwks.json
+                          # Listing a cookie turns off the default locations, so the header is listed too.
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          from_cookies:
+                            - __Host-access-token
+                          # The filter removes these headers from every request, also on the routes
+                          # without a requirement, and sets them only from a valid token.
+                          claim_to_headers:
+                            - header_name: x-user-id
+                              claim_name: sub
+                            - header_name: x-user-name
+                              claim_name: preferred_username
+                      # A route asks for a token by naming this requirement.
+                      requirement_map:
+                        signed-in-user:
+                          provider_name: platform-service
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                route_config:
+                  name: gateway
+                  virtual_hosts:
+                    - name: chess-platform
+                      domains: ["*"]
+                      # The first matching route wins.
+                      routes:
+                        # Every client address gets a token bucket of its own for the sign-in (ADR-3). Only POST
+                        # counts, so the images of another site cannot use up the attempts either. The platform-service
+                        # takes the method and the path regardless of case and the path also with a slash at the end,
+                        # so the match does too.
+                        - match:
+                            path_separated_prefix: /api/auth/login
+                            case_sensitive: false
+                            headers:
+                              - name: ":method"
+                                string_match:
+                                  exact: POST
+                                  ignore_case: true
+                          route:
+                            cluster: platform-service
+                          typed_per_filter_config:
+                            envoy.filters.http.local_ratelimit:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                              stat_prefix: login
+                              # Both are 0 percent by default, so the route turns on the filter and its enforcement.
+                              filter_enabled:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                              filter_enforced:
+                                default_value:
+                                  numerator: 100
+                                  denominator: HUNDRED
+                              # The descriptor is the address of the connection, because use_remote_address is on.
+                              rate_limits:
+                                - actions:
+                                    - remote_address: {}
+                              # A descriptor without a value is a wildcard, so each address gets a bucket of its own.
+                              # A full bucket of 30 tokens takes 60 seconds, and the cache keeps the buckets of far
+                              # more addresses than sign in within that time.
+                              descriptors:
+                                - entries:
+                                    - key: remote_address
+                                  token_bucket: &login-bucket
+                                    max_tokens: 30
+                                    tokens_per_fill: 1
+                                    fill_interval: 2s
+                              max_dynamic_descriptors: 10000
+                              # A route needs a default bucket, which only a request without a descriptor uses.
+                              token_bucket: *login-bucket
+                              always_consume_default_token_bucket: false
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin-unsafe
+
+                        - match:
+                            path_separated_prefix: /api/auth
+                          route:
+                            cluster: platform-service
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin-unsafe
+
+                        - match:
+                            path_separated_prefix: /api
+                          route:
+                            cluster: platform-service
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin-unsafe
+                            envoy.filters.http.jwt_authn:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.PerRouteConfig
+                              requirement_name: signed-in-user
+
+                        # A WebSocket lives longer than a request, so the route timeout is off
+                        # and the idle timeout is longer than the default of 5 minutes.
+                        - match:
+                            path_separated_prefix: /ws/game
+                          route:
+                            cluster: game-service
+                            timeout: 0s
+                            idle_timeout: 3600s
+                            upgrade_configs:
+                              - upgrade_type: websocket
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin
+                            envoy.filters.http.jwt_authn:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.PerRouteConfig
+                              requirement_name: signed-in-user
+
+                        - match:
+                            path_separated_prefix: /ws/spectate
+                          route:
+                            cluster: game-service
+                            timeout: 0s
+                            idle_timeout: 3600s
+                            upgrade_configs:
+                              - upgrade_type: websocket
+                          typed_per_filter_config:
+                            envoy.filters.http.lua:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+                              name: same-origin
+
+                        - match:
+                            prefix: /
+                          route:
+                            cluster: frontend
+
+  # STRICT_DNS resolves the service name of compose to every instance of the service.
+  clusters:
+    - name: frontend
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: frontend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: frontend
+                      port_value: 8080
+
+    - name: platform-service
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: platform-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: platform-service
+                      port_value: 8080
+
+    - name: game-service
+      type: STRICT_DNS
+      dns_lookup_family: V4_ONLY
+      load_assignment:
+        cluster_name: game-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: game-service
+                      port_value: 3001
+
+# The admin interface listens only inside the container and is never published.
+admin:
+  address:
+    socket_address:
+      address: 127.0.0.1
+      port_value: 9901

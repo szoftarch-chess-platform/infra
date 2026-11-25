@@ -1,0 +1,247 @@
+# Base compose file of the platform. It runs the released images of the services.
+# compose.dev.yaml builds the services from the sibling folders instead.
+
+name: chess-platform
+
+# Docker checks a container every 2 seconds while it starts, so compose notices at once when it is
+# healthy, and every 30 seconds after that. A failed check counts only after the first successful
+# one or after the first 60 seconds.
+x-healthcheck-timing: &healthcheck-timing
+  start_period: 60s
+  start_interval: 2s
+  interval: 30s
+  timeout: 5s
+  retries: 3
+
+# The database of the platform-service, for the service and for its migrations.
+x-platform-database: &platform-database
+  ConnectionStrings__Platform: Host=postgres;Database=platform;Username=platform;Password=${POSTGRES_PLATFORM_PASSWORD:?set it in .env};GSS Encryption Mode=Disable
+
+services:
+  # The only container with a port on the host in this file. compose.dev.yaml adds the ports for development.
+  envoy:
+    image: envoyproxy/envoy:v1.40-latest
+    ports:
+      - "${GATEWAY_PORT:?set it in .env}:8443"
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - type: bind
+        source: ./secrets/tls
+        target: /etc/envoy/tls
+        read_only: true
+        bind:
+          create_host_path: false
+      # Only the public keys are mounted. The private key stays outside the gateway.
+      - type: bind
+        source: ./secrets/jwt/jwks.json
+        target: /etc/envoy/jwt/jwks.json
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      frontend:
+        condition: service_healthy
+      game-service:
+        condition: service_healthy
+      platform-service:
+        condition: service_healthy
+    healthcheck:
+      # The image has no curl or wget, so bash asks the admin interface directly.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9901 &&
+          printf 'GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q LIVE <&3
+      <<: *healthcheck-timing
+
+  frontend:
+    image: ghcr.io/szoftarch-chess-platform/frontend:${FRONTEND_TAG:?set it in .env}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      <<: *healthcheck-timing
+
+  platform-service:
+    image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
+    environment:
+      <<: *platform-database
+      ConnectionStrings__RabbitMq: amqp://platform-service:${RABBITMQ_PLATFORM_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
+      Jwt__SigningKeyPath: /run/secrets/jwt-signing-key.pem
+    # An error at startup, such as a missing setting, aborts .NET. As process 1 it cannot abort, so it would end
+    # with the exit code 139 of a crash. Under an init process it ends with the exit code 134 of an abort.
+    init: true
+    volumes:
+      # The private key that signs the access tokens. Only this container gets it.
+      - type: bind
+        source: ./secrets/jwt/private-key.pem
+        target: /run/secrets/jwt-signing-key.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - default
+      - postgres
+      - rabbitmq
+    depends_on:
+      platform-migrations:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      # The image has no shell or curl, so the health probe of the image asks for the readiness of the service.
+      test: ["CMD", "./health-probe/PlatformService.HealthProbe", "http://127.0.0.1:8080/health/ready"]
+      <<: *healthcheck-timing
+
+  # Applies the migrations of the platform-service once and exits, before the service starts.
+  platform-migrations:
+    image: ghcr.io/szoftarch-chess-platform/platform-service:${PLATFORM_SERVICE_TAG:?set it in .env}
+    entrypoint: ["./efbundle"]
+    environment:
+      <<: *platform-database
+    networks:
+      - postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  game-service:
+    image: ghcr.io/szoftarch-chess-platform/game-service:${GAME_SERVICE_TAG:?set it in .env}
+    environment:
+      PORT: 3001
+      HOST: 0.0.0.0
+      REDIS_URL: redis://game-service:${REDIS_GAME_PASSWORD:?set it in .env}@redis:6379
+      RABBITMQ_URL: amqp://game-service:${RABBITMQ_GAME_PASSWORD:?set it in .env}@rabbitmq:5672/%2f
+      ENGINE_URL: http://engine-service:8000
+    # Node.js does not stop on SIGTERM as process 1, so an init process forwards it.
+    init: true
+    networks:
+      - default
+      - engine
+      - redis
+      - rabbitmq
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      engine-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/health"]
+      <<: *healthcheck-timing
+
+  # Reachable only from the game-service, on the internal network.
+  engine-service:
+    image: ghcr.io/szoftarch-chess-platform/engine-service:${ENGINE_SERVICE_TAG:?set it in .env}
+    environment:
+      PORT: 8000
+      HOST: 0.0.0.0
+    # Python does not handle SIGTERM as process 1, so an init process forwards it.
+    init: true
+    networks:
+      - engine
+    healthcheck:
+      # The image has no wget or curl, so Python asks for the health check. It fails on any status other than 2xx.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      <<: *healthcheck-timing
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set it in .env}
+      POSTGRES_PLATFORM_PASSWORD: ${POSTGRES_PLATFORM_PASSWORD:?set it in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - postgres
+    healthcheck:
+      # The init scripts run on a server without TCP, so the check passes only when they are done.
+      test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "postgres"]
+      <<: *healthcheck-timing
+
+  redis:
+    image: redis:8.8-alpine
+    # Only the user of the game-service can sign in. It may use every command
+    # except the administrative and the dangerous ones, and the default user is
+    # turned off.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --user
+      - default
+      - "off"
+      - --user
+      - game-service
+      - "on"
+      - ">${REDIS_GAME_PASSWORD:?set it in .env}"
+      - "~*"
+      - "&*"
+      - "+@all"
+      - "-@admin"
+      - "-@dangerous"
+    environment:
+      # The password of redis-cli in the health check.
+      REDISCLI_AUTH: ${REDIS_GAME_PASSWORD:?set it in .env}
+    volumes:
+      - redis-data:/data
+    networks:
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --user game-service ping | grep -q PONG"]
+      <<: *healthcheck-timing
+
+  rabbitmq:
+    image: rabbitmq:4.4-management-alpine
+    # The node name contains the host name, and the data directory belongs to the node name.
+    hostname: rabbitmq
+    environment:
+      # The passwords of the users that rabbitmq.conf creates.
+      RABBITMQ_ADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
+      RABBITMQ_GAME_PASSWORD: ${RABBITMQ_GAME_PASSWORD:?set it in .env}
+      RABBITMQ_PLATFORM_PASSWORD: ${RABBITMQ_PLATFORM_PASSWORD:?set it in .env}
+      # The user of rabbitmqadmin in the container, which sends the test events.
+      RABBITMQADMIN_USERNAME: admin
+      RABBITMQADMIN_PASSWORD: ${RABBITMQ_ADMIN_PASSWORD:?set it in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      # The users, and the policies that RabbitMQ imports at every start.
+      - type: bind
+        source: ./rabbitmq/rabbitmq.conf
+        target: /etc/rabbitmq/rabbitmq.conf
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./rabbitmq/definitions.json
+        target: /etc/rabbitmq/definitions.json
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - rabbitmq
+    healthcheck:
+      # The AMQP port accepts connections only once the node can serve the clients, while the ping of
+      # rabbitmq-diagnostics succeeds as soon as the Erlang runtime runs. RabbitMQ calls a TCP check of the AMQP
+      # port the best practice for readiness, and it needs no command line tool that joins the Erlang cluster.
+      test: ["CMD", "nc", "-z", "127.0.0.1", "5672"]
+      <<: *healthcheck-timing
+
+# The default network connects the gateway with the containers behind it.
+# Each data store and the engine has a network of its own with the services that use it.
+networks:
+  engine:
+    internal: true
+  postgres:
+  redis:
+  rabbitmq:
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
