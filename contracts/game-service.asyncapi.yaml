@@ -128,7 +128,8 @@ operations:
     description: >-
       Once the move is accepted, every connection of both players gets `moveMade`, the sender
       included. The event is rejected with `gameNotFound` if the user plays no game with this id,
-      with `notYourTurn` or with `illegalMove`.
+      with `notYourTurn` or with `illegalMove`. A move that comes after the time of the user has run
+      out ends the game on time and is rejected with `gameNotFound`.
     channel:
       $ref: '#/channels/game'
     messages:
