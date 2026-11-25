@@ -167,7 +167,8 @@ services:
   redis:
     image: redis:8.8-alpine
     # Only the user of the game-service can sign in. It may use every command
-    # except the administrative ones, and the default user is turned off.
+    # except the administrative and the dangerous ones, and the default user is
+    # turned off.
     command:
       - redis-server
       - --appendonly
@@ -183,6 +184,7 @@ services:
       - "&*"
       - "+@all"
       - "-@admin"
+      - "-@dangerous"
     environment:
       # The password of redis-cli in the health check.
       REDISCLI_AUTH: ${REDIS_GAME_PASSWORD:?set it in .env}
