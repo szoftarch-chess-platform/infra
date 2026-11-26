@@ -1737,20 +1737,14 @@ docker compose down --volumes
 
 ## 6. Továbbfejlesztési lehetőségek - Anna
 
-> **Felelős:** közös
+- **Szűrés a játszmaelőzményekben:** ellenfélre, eredményre, játékmódra és időszakra. A `GET /api/games` ehhez új, opcionális paramétereket kapna.
+- **Élő közvetítés:** egy megosztható linken bárki nézhetné a játszmát. A `/ws/spectate` útvonal már megvan a game-service-ben és a gatewayben, a szerződése és a felülete hiányzik.
+- **Élő-pontszám [40] és ehhez igazodó párosítás:** a pontszámot egy új fogyasztó számolná a `game.finished.v1` eseményekből, a game-service módosítása nélkül.
+- **Barátok és kihívás:** keresés név alapján, barátlista a platform-service-ben, és egy barát közvetlen kihívása a game-service új Socket.IO-eseményeivel.
+- **Új játékmódok:** például Chess960. A szerződések már tartalmazzák a játékváltozatot és az időkontrollt, a szabálykönyvtárnak és a motornak kell támogatnia az új módot.
+- **Aszinkron játszmák:** napok egy lépésre, egyszerre több játszma. A játszmák tartós adatbázisba kerülnének, és a játékost pedig lehetne értesíteni a lépéséről.
 
-> Kifejtendő: a meg nem valósított extra funkciók és egyéb ötletek, pl.:
->
-> - Élő-pontrendszer és ranglétra, pontszám alapú párosítás
-> - barátok, felhasználókeresés, kihívás
-> - aszinkron játszmák
-> - megfigyelői link
-> - több tábla- és bábustílus
-> - új játékmódok (Chess960)
-> - AI nehézségi szintek
-> - **[AZURE]** az éles környezet bővítése: automatikus skálázás, több régió, mentések, külön teszt- és éles környezet
->
-> Zárómondat: mely tervezési döntések segítik ezek későbbi megvalósítását.
+A bővítéseket segíti, hogy a szerződések kompatibilisen bővíthetők, a befejezett játszmák eseményére új fogyasztó építhető, a szolgáltatások pedig egymástól függetlenül fejleszthetők.
 
 ---
 
@@ -1882,4 +1876,7 @@ docker compose down --volumes
 
 [39] microservices.io, a transactional outbox minta\
 <https://microservices.io/patterns/data/transactional-outbox>
+
+[40] Élő-pontrendszer, Wikipédia\
+<https://hu.wikipedia.org/wiki/Élő-pontrendszer>
 
