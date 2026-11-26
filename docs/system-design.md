@@ -1262,59 +1262,58 @@ docker compose down --volumes
 
 ## 4. A program készítése során felhasznált eszközök
 
-Az alábbi felsorolás az öt repó konfigurációja, függőségei, build- és tesztbeállításai, valamint a fejlesztés során használt eszközök alapján készült. A csomagok közül a rendszerterv szempontjából fontos közvetlen függőségeket emeli ki.
 
-- **React, React DOM, TypeScript, Vite és React Router**  
+- **React, React DOM, TypeScript, Vite és React Router**  \
   Felhasználás: a böngészőben futó kliens felületének és útvonalainak megvalósítása, fejlesztése és buildelése.
-- **Chakra UI, Emotion, TanStack Query, Zustand, react-chessboard, chess.js és Socket.IO Client**
+- **Chakra UI, Emotion, TanStack Query, Zustand, react-chessboard, chess.js és Socket.IO Client** \
   Felhasználás: a felhasználói felület és a sakktábla megjelenítése, a szerveradatok és kliensállapot kezelése, a sakk szabályainak kliensoldali támogatása, valamint a game-service-szel való valós idejű kommunikáció.
-- **.NET 10, ASP.NET Core és ASP.NET Core Identity**  
+- **.NET 10, ASP.NET Core és ASP.NET Core Identity**  \
   Felhasználás: a platform-service HTTP API-jának és felhasználói fiókkezelésének megvalósítása.
-- **Entity Framework Core, Npgsql, FluentValidation, JSON Web Token (JWT) és Scalar**  
+- **Entity Framework Core, Npgsql, FluentValidation, JSON Web Token (JWT) és Scalar**  \
   Felhasználás: adatbázis-hozzáférés és migrációk, kérésvalidáció, tokenkezelés, valamint a fejlesztői API-dokumentáció és kipróbálható API-felület biztosítása.
-- **Node.js, TypeScript, NestJS, NestJS Config, Express-adapter, Socket.IO, RxJS és reflect-metadata**  
+- **Node.js, TypeScript, NestJS, NestJS Config, Express-adapter, Socket.IO, RxJS és reflect-metadata**  \
   Felhasználás: a game-service futtatása és konfigurálása, moduláris felépítése, valamint a játékosok valós idejű eseményeinek kezelése.
-- **node-redis (`@redis/client`), Lua, `amqplib` és chess.js**  
+- **node-redis (`@redis/client`), Lua, `amqplib` és chess.js**  \
   Felhasználás: az aktív játszmák Redis-állapotának kezelése és atomi Lua-szkriptek futtatása, a RabbitMQ-val történő eseményközvetítés és a sakk szabályainak ellenőrzése.
-- **Python, FastAPI, Uvicorn, python-chess és Stockfish**  
+- **Python, FastAPI, Uvicorn, python-chess és Stockfish**  \
   Felhasználás: az engine-service HTTP API-ja, a sakkállások kezelése és a számítógépes ellenfél lépéseinek kiszámítása.
-- **PostgreSQL, Redis és RabbitMQ**  
+- **PostgreSQL, Redis és RabbitMQ**  \
   Felhasználás: a felhasználói és játszmaelőzmény-adatok tartós tárolása, az aktív játszmák állapotának kezelése, valamint a szolgáltatások közötti aszinkron eseményközvetítés.
-- **Envoy és nginx**  
+- **Envoy és nginx**  \
   Felhasználás: az Envoy a bejövő forgalom továbbítására és gateway-feladatokra, az nginx a frontend statikus fájljainak kiszolgálására szolgál.
 - **Docker, Docker Compose és Docker Buildx**  
   Felhasználás: a szolgáltatások és adattárolók konténerizálása, a helyi rendszer összehangolt futtatása, valamint több processzor-architektúrára készülő képek buildelése.
 - **OpenSSL**  
   Felhasználás: a helyi fejlesztői HTTPS-kapcsolathoz szükséges tanúsítványok előállítása egy konténerben.
-- **HTTP, WebSocket, AMQP és TLS**  
+- **HTTP, WebSocket, AMQP és TLS**  \
   Felhasználás: a szolgáltatások szinkron HTTP-kommunikációja, a valós idejű játékmenet, az üzenetközvetítő elérése és a gateway titkosított elérése.
-- **OpenAPI, AsyncAPI és Redocly CLI**  
+- **OpenAPI, AsyncAPI és Redocly CLI**  \
   Felhasználás: a HTTP- és eseményalapú szolgáltatási szerződések leírása és lintelése.
-- **Mermaid és Markdown**  
+- **Mermaid és Markdown**  \
   Felhasználás: a rendszer- és állapotdiagramok, illetve a műszaki dokumentáció elkészítése.
-- **Vitest, React Testing Library, Testing Library DOM, jest-dom, user-event, jsdom, pytest, HTTPX és xUnit v3**  
+- **Vitest, React Testing Library, Testing Library DOM, jest-dom, user-event, jsdom, pytest, HTTPX és xUnit v3**  \
   Felhasználás: a frontend, a game-service, az engine-service és a platform-service automatizált egység-, komponens- és integrációs tesztelése.
-- **Testcontainers és Microsoft Testing Platform**
+- **Testcontainers és Microsoft Testing Platform** \
   Felhasználás: tesztekhez szükséges Redis-, PostgreSQL- és RabbitMQ-példányok konténeres indítása, illetve a .NET-tesztek futtatása.
-- **ESLint, Prettier, TypeScript compiler, .NET SDK, EF Core CLI, pip és npm**  
+- **ESLint, Prettier, TypeScript compiler, .NET SDK, EF Core CLI, pip és npm** \
   Felhasználás: statikus kódellenőrzés, formázás, fordítás/buildelés, adatbázis-migrációk kezelése és függőségek telepítése.
 - **GitHub Actions és GitHub Container Registry (GHCR)**  
   Felhasználás: a repók CI-folyamatainak futtatása, valamint a konténerképek buildelése és közzététele.
-- **Git és GitHub**  
+- **Git és GitHub** \
   Felhasználás: forráskód-verziókezelés, a különálló repók együttműködésének, a pull requesteknek és a CI-folyamatoknak a támogatása.
-- **Visual Studio és Visual Studio Code**  
+- **Visual Studio és Visual Studio Code**  \
   Felhasználás: a .NET-es platform-service, a többi szolgáltatás és a dokumentáció fejlesztése, szerkesztése és tesztelése.
-- **Notepad és Notepad++**  
+- **Notepad és Notepad++**  \
   Felhasználás: egyszerű szöveges fájlok, jegyzetek és konfigurációk megtekintése, illetve szerkesztése.
-- **Microsoft Word és Adobe Acrobat (PDF)**  
+- **Microsoft Word és Adobe Acrobat (PDF)**  \
   Felhasználás: dokumentumok szerkesztése, illetve PDF-formátumú anyagok megtekintése és kezelése.
-- **Google Chrome és Brave**  
+- **Google Chrome és Brave**  \
   Felhasználás: a webes kliens és a helyben futó rendszer elérése, valamint a felület böngészőben történő ellenőrzése. A specifikáció Chrome-ra, Firefoxra és Edge-re vonatkozó támogatási elvárásait a 3.1. fejezet ismerteti.
-- **GitHub Copilot, Microsoft Copilot, Claude és Gemini**
+- **GitHub Copilot, Microsoft Copilot, Claude és Gemini** \
   Felhasználás: a fejlesztési és dokumentációs munka támogatása; az előállított kód és szöveg helyességét a fejlesztők ellenőrzik.
 
-Az Azure és a Playwright a dokumentáció készítésekor tervezett, de még nem megvalósított elemek, ezért nem szerepelnek a ténylegesen használt eszközök között.
-
+  **Az Azure és a Playwright** \
+  Felhasználás:  
 ---
 
 ## 5. Összefoglalás - Anna
