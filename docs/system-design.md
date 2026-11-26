@@ -350,17 +350,32 @@ A `Szoft Arch Sakkplatform Specifikáció.pdf` tartalma, változatlanul:
 
 > **Felelős:** game-service
 
-> Kifejtendő:
->
-> - **ábra:** UML állapotgép-diagram egy játszma (és a felhasználó) életciklusáról, pl.:
-> nincs játszma → várósorban → folyamatban → befejezve → átadva a platform-service-nek
-> - az átmenetek eseményei (párosítás, AI-játszma indítása, lépés, feladás, kilépés a sorból)
-> - a befejezés okai: matt, patt, döntetlen szabályok (anyaghiány, háromszori ismétlés, 50 lépés), feladás,
-> lejárt idő, kapcsolat elvesztése (ha van ilyen szabály)
-> - a sakkóra működése: mikor indul, mikor áll, ki méri (a szerver)
->
-> Forrás: `game-service/src`, `infra/docs/adr/live-game.md`, `infra/docs/adr/chess-rules.md`,
-> `infra/contracts/game-service.asyncapi.yaml`
+A game-service kezeli a felhasználók várakozási és aktív játszmaállapotát, valamint a játszmák teljes életciklusát. Egy felhasználó egyszerre vagy szabad, vagy a párosításra vár, vagy egy játszmában vesz részt. A várósorba lépéskor, illetve AI-ellenfél indításakor a szolgáltatás ellenőrzi ezt az állapotot; a már várakozó vagy játszó felhasználó újabb ilyen kérést nem indíthat. Ha van várakozó ellenfél, a párosítás azonnal megtörténik, és mindkét játékos `gameStarted` eseményt kap. AI elleni játék is azonnal létrejön. A játékosok színe véletlenszerű.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Szabad
+    state "Várósorban" as Varosorban
+    state "Aktív játszma" as Jatszmaban
+    state "Befejezett" as Befejezett
+    Szabad --> Varosorban: joinQueue
+    Varosorban --> Szabad: leaveQueue vagy az utolsó kapcsolat bontása
+    Varosorban --> Jatszmaban: párosítás, gameStarted
+    Szabad --> Jatszmaban: startBotGame, gameStarted
+    Jatszmaban --> Jatszmaban: szabályos lépés, moveMade
+    Jatszmaban --> Befejezett: matt, patt, döntetlen, feladás, időtúllépés vagy motorhiba
+    Befejezett --> Szabad: gameEnded, aktív állapot törlése
+    note right of Befejezett: A game.finished.v1 esemény a lezárással együtt az outboxba kerül továbbítása aszinkron.
+```
+
+Az aktív játszmában a game-service ellenőrzi a lépések szabályosságát és a soron következő játékost. Érvényes lépés után frissíti a pozíciót és az órát, majd `moveMade` eseményt küld a játékosok minden aktív kapcsolatának. AI ellen a game-service kéri a motor lépését; a motor válasza ugyanúgy a játszma állapotát módosító lépés. Újracsatlakozáskor a kliens a `getState` eseménnyel kérheti le, hogy várósorban van-e, illetve a folyamatban lévő játszma állapotát. A kapcsolat megszakadása önmagában nem fejezi be az aktív játszmát: a játékos visszacsatlakozhat, az órája pedig tovább fut. Ha a várakozó felhasználó utolsó kapcsolata is megszűnik, kikerül a sorból. Az aktív játszmából feladással lehet kilépni.
+
+A játszma mattal, pattal, háromszori ismétlés, az 50 lépéses szabály vagy elégtelen anyag miatt döntetlennel, feladással vagy időtúllépéssel érhet véget. Ha a sakkmotor ismételt kérése is sikertelen, a játszma `aborted` eredménnyel, `engineFailure` okkal zárul. Időtúllépéskor a soron lévő játékos veszít; kivétel, ha az ellenfélnek csak királya, vagy királya és egy futója vagy huszárja maradt, mert ekkor döntetlen az eredmény. A platform automatikusan alkalmazza a háromszori ismétlés és az 50 lépés szabályát, külön játékosi igénylés nélkül. A lezárás oka a `gameEnded` eseményben jelenik meg: `checkmate`, `stalemate`, `threefoldRepetition`, `fiftyMoveRule`, `insufficientMaterial`, `resignation`, `timeout` vagy `engineFailure`.
+
+A játszma szerveroldali sakkórája játékosonként 10 perc, lépésenkénti többletidő nélkül. A fehér órája indul el a kezdéskor, kivéve, ha a fehér a motor: ilyenkor az első motorlépés után indul a felhasználó órája. Két emberi játékos esetén minden lépés után a másik játékos órája fut. AI ellen a motor gondolkodási ideje alatt a felhasználó órája megáll, majd a motor lépésének rögzítésekor újraindul. A game-service számolja az eltelt időt, Redisben tárolja az óra állapotát és határidejét, és lejáratkor akkor is lezárja a játszmát, ha nem érkezik új kliensesemény. A lezáráskor a szolgáltatás értesíti a játékosokat `gameEnded` eseménnyel, és a `game.finished.v1` eseményt a játszma lezárásával együtt az outboxba írja; az outbox RabbitMQ-n keresztül továbbítja az eredményt a platform-service-nek, amely elmenti a játszmaelőzménybe. Az átadás részleteit a 2.6. fejezet ismerteti.
+
+Forrás: `game-service/src`, `game-service/docs/adr/game-state.md`, `infra/docs/adr/live-game.md`,
+`infra/docs/adr/chess-rules.md`, `infra/contracts/game-service.asyncapi.yaml`
 
 ### 2.8 Adat- és adatbázisterv - Sz. B.
 
@@ -465,14 +480,55 @@ A `Szoft Arch Sakkplatform Specifikáció.pdf` tartalma, változatlanul:
 > teljesíti őket (pl. válaszidő, 500 ms-os késleltetés → WebSocket; 100 aktív játszma → 2.12;
 > utolsó 100 játszma tárolása - kéne seed az adatbázisba (100-200 játszma); Docker → hordozhatóság;).
 
-### 2.14 Tesztelés - Anna (jövőben mit lehetne még?)
+### 2.14 Tesztelés
 
-> **Felelős:** minden szolgáltatás a sajátját
+A projekt automatizált tesztjei a szolgáltatások saját repóiban találhatók. A gyors, külső infrastruktúrát nem igénylő unit- és komponens-tesztek a belső logikát vizsgálják; az integrációs tesztek ott használnak valódi adatbázist, Redis-példányt vagy üzenetközvetítőt, ahol ezek viselkedése a szolgáltatás működésének része. A CI minden szolgáltatásnál futtatja a hozzá tartozó automatizált ellenőrzéseket és buildet. A következő bontás a jelenlegi teszteket, majd külön jelölve a továbbfejlesztési lehetőségeket mutatja be.
 
-> Kifejtendő: tesztelési stratégia komponensenként (unit, integrációs, komponens tesztek; a használt
-> keretrendszerek a repókból ellenőrizendők), fake backendek a frontend fejlesztéséhez, manuális tesztelés.
->
-> Forrás: `platform-service/docs/adr/testing.md`, `frontend/docs/adr/testing.md`, `frontend/docs/adr/fake-backends.md`
+#### 2.14.1 Webes kliens (frontend)
+
+- **Unit- és komponens-tesztek:** Vitest, React Testing Library és jsdom segítségével ellenőrzik a kliensoldali logikát és a felületi komponenseket. A lefedett területek közé tartozik többek között a játékszabályok és az óra kezelése, a játékállapot és a kapcsolat állapota, a lobby-műveletek, az űrlapok szabályai, az útvonalvédelem, valamint a játék-, előzmény- és visszajátszásoldal. A böngészőben elérhető, de jsdomból hiányzó funkciókhoz a tesztkörnyezet helyettesítőket használ.
+- **API- és fake-tesztek:** a valódi HTTP-kliens, a Socket.IO-kliens és a hibakezelés külön teszteket kap. A fake Auth API, Games API és game socket tesztjei a kliens backend nélküli működését ellenőrzik. A `dev:fake` mód a böngészőben is elindítható, így a felület a szolgáltatások nélkül kipróbálható; a fake implementációk a szerződések példáihoz igazodnak.
+- **Jelenlegi korlát és továbbfejlesztés:** ezek a tesztek nem egy telepített teljes rendszert vagy valódi böngészőket automatizálnak. A frontend ADR Playwright-alapú, több böngésző-kontextust használó végponttól végpontig tartó teszteket jelöl meg későbbi lehetőségként; a Playwright jelenleg nincs beállítva.
+- **Kézi ellenőrzés:** a felhasználói folyamatokat a böngészőben, lehetőség szerint a fake módban és a gateway-en keresztül futó teljes rendszerrel is érdemes kipróbálni.
+
+#### 2.14.2 Platform-service
+
+- **Unit-tesztek:** xUnit v3-mal vizsgálják a domain- és alkalmazási réteg üzleti logikáját, például a regisztrációt, bejelentkezést, munkameneteket, tokeneket, felhasználói szolgáltatásokat, játszmaelózmény-feldolgozást és validátorokat. Kézzel készített fake repository-k és szolgáltatások, illetve szabályozható tesztóra segítségével a tesztek Docker nélkül futnak.
+- **Integrációs tesztek:** a teljes ASP.NET Core alkalmazást memóriában indítják `WebApplicationFactory` segítségével. Ellenőrzik a HTTP-végpontokat, a hitelesítést és cookie-kat, a JSON-konvenciókat, a hibák ProblemDetails-válaszokká alakítását, az API-dokumentumot, az adatbázis-műveleteket és a RabbitMQ-fogyasztót. A PostgreSQL-t és RabbitMQ-t Testcontainers indítja valódi konténerben, az adatbázisra a migrációk is lefutnak; a RabbitMQ-tesztek izolált virtuális hosttal és jogosultságokkal dolgoznak. Ezek futtatásához Docker szükséges.
+- **Kézi ellenőrzés:** ellenőrizhető a fejlesztői Scalar API-felület, a regisztráció/bejelentkezés/kijelentkezés, a munkamenet-frissítés és a játszmaelózmények lekérése. A sikeres és hibás kéréseket, valamint a lejárt token és munkamenet eseteit is érdemes kipróbálni.
+
+#### 2.14.3 Game-service
+
+- **Unit-tesztek:** Vitesttel ellenőrzik a sakk-szabályokat, az órát, a konfigurációt, a motor-kliens viselkedését, az outbox publikálási logikáját, a játék- és Socket.IO gateway-műveleteket, valamint a hibás események nyugtázását. A külső komponensek egy részét a tesztek helyettesítik, így a szolgáltatás üzleti szabályai gyorsan vizsgálhatók.
+- **Redis-integrációs tesztek:** a RedisService tesztjei nem mockolt Redis-klienssel, hanem Testcontainers által indított valódi Redisben futnak. Ezzel az atomi Lua-szkriptek, a több kulcsot érintő állapotváltozások, a párosítás, az órák határideje és az outbox adattárolása is ellenőrizhető. Ezekhez Docker szükséges.
+- **Kézi ellenőrzés:** a frontenddel együtt kipróbálható a várólistába lépés és kilépés, két felhasználó párosítása, AI-játszma, szabálytalan és szabályos lépések, feladás, időtúllépés, újracsatlakozás, valamint az eredmény platform-service felé történő továbbítása.
+
+#### 2.14.4 Engine-service
+
+- **Unit- és API-szerződés-tesztek:** pytesttel vizsgálják az egészségügyi végpontot, a bemeneti FEN és a variáns ellenőrzését, a végállás és hibás kérés kezelését, illetve a válasz szerkezetét. A motorfolyamat újraindítását vizsgáló teszt helyettesített folyamatot használ, így a hibakezelés és a korlátok külön is tesztelhetők.
+- **Valódi motorral végzett integrációs teszt:** a `test_engine_real.py` tényleges Stockfish-példányt indít, és ellenőrzi, hogy a kezdőállásra adott ajánlott lépés legális. Ez a teszt csak akkor futtatható, ha a Stockfish elérhető, és a `STOCKFISH_PATH` be van állítva; a CI telepíti a motort.
+- **Konténeres smoke teszt:** a CI felépíti és elindítja a Docker-képet, megvárja az egészséges állapotot, majd HTTP-kéréssel ellenőrzi, hogy a motor-végpont használható és szabályos lépést ad vissza.
+- **Kézi ellenőrzés:** különféle érvényes és érvénytelen FEN-állásokkal tesztelhető a végpont, valamint a motor hibás vagy nem elérhető állapotának kezelése.
+
+#### 2.14.5 Teljes rendszer és manuális tesztelés
+
+Az `infra/scripts/smoke-test.mjs` a Docker Compose-szal elindított teljes rendszert a gateway-en keresztül vizsgálja. Többek között ellenőrzi, hogy betöltődik-e a webes kliens, működnek-e a tokenes védett útvonalak, elérhető-e a platform API, helyesek-e a WebSocket/gateway-hozzáférések, érvényesül-e a rate limit, illetve a RabbitMQ-n publikált befejezett játszma megjelenik-e a felhasználó előzményeiben. Ez rendszerintegrációs smoke teszt, nem helyettesíti a részletes unit- és integrációs teszteket.
+
+A teljes rendszer manuális átvételekor legalább az alábbi forgatókönyvek javasoltak:
+
+1. Regisztráció, bejelentkezés, oldalfrissítés utáni munkamenet-helyreállítás és kijelentkezés.
+2. Két külön böngészőben vagy privát munkamenetben belépő felhasználó párosítása, lépések küldése és a másik kliensen megjelenő frissítés ellenőrzése.
+3. AI elleni játék, beleértve azt az esetet is, amikor a motor kezd, továbbá több egymást követő lépés ellenőrzése.
+4. Matt, patt, döntetlen, feladás és időtúllépés ellenőrzése; annak vizsgálata, hogy a végeredmény mindkét kliensen és a játék előzményeiben is helyesen jelenik-e meg.
+5. Böngészőkapcsolat megszakítása és visszaállítása: aktív játszma folytatása, illetve a várakozóból való kikerülés, ha a felhasználó utolsó kapcsolata bontódik.
+6. Szolgáltatás- vagy adattároló-hiba esetén a felhasználónak adott visszajelzés, naplók és helyreállás ellenőrzése.
+7. A felület ellenőrzése a specifikációban megjelölt böngészőkben: Chrome, Firefox és Edge; eltérő méretű ablakokban és hibás/üres állapotoknál is.
+
+A kézi és böngészőautomatizálási tesztek eredményét, a tesztelt verziót és az esetleges hibákat érdemes a kiadás előtti ellenőrzőlistában rögzíteni. A kézi tesztelés nem váltja ki az automatizált regressziós teszteket.
+
+**A tesztfuttatás fő parancsai:** frontend: `npm test`; game-service: `npm test`; engine-service: `python -m pytest tests -q`; platform-service: `dotnet test`. A game-service Redis-tesztjei, valamint a platform-service integrációs tesztjei Docker-környezetet igényelnek.
+
+**Források:** `frontend/docs/adr/testing.md`, `frontend/docs/adr/fake-backends.md`, `game-service/docs/adr/game-state.md`, `platform-service/docs/adr/testing.md`, az egyes repók tesztfájljai és CI-workflow-i, valamint `infra/scripts/smoke-test.mjs`.
 
 ---
 
@@ -512,21 +568,60 @@ A `Szoft Arch Sakkplatform Specifikáció.pdf` tartalma, változatlanul:
 
 ---
 
-## 4. A program készítése során felhasznált eszközök - Bence
+## 4. A program készítése során felhasznált eszközök
 
-> **Felelős:** minden szolgáltatás a sajátját
+Az alábbi felsorolás az öt repó konfigurációja, függőségei, build- és tesztbeállításai, valamint a fejlesztés során használt eszközök alapján készült. A csomagok közül a rendszerterv szempontjából fontos közvetlen függőségeket emeli ki.
 
-> Kifejtendő: a mintához hasonló lista, eszközönként „Felhasználás: …” sorral. Pl.:
->
-> - React, TypeScript, Vite, React Router, TanStack Query, sakktábla-könyvtár
-> - ASP.NET Core, Entity Framework Core, ASP.NET Identity
-> - NestJS, Socket.IO, sakkszabály-könyvtár
-> - Python, webes keretrendszer, sakkmotor
-> - PostgreSQL, Redis, RabbitMQ, Envoy, nginx
-> - Docker, Docker Compose
-> - **[AZURE]** a használt Azure-szolgáltatások (lásd 2.4.2), Azure CLI, Bicep/Terraform, GitHub Actions
-> - OpenAPI, AsyncAPI, Redocly
-> - Git, GitHub, IDE-k, diagramkészítő (Mermaid), dokumentációkészítő
+- **React, React DOM, TypeScript, Vite és React Router**  
+  Felhasználás: a böngészőben futó kliens felületének és útvonalainak megvalósítása, fejlesztése és buildelése.
+- **Chakra UI, Emotion, TanStack Query, Zustand, react-chessboard, chess.js és Socket.IO Client**
+  Felhasználás: a felhasználói felület és a sakktábla megjelenítése, a szerveradatok és kliensállapot kezelése, a sakk szabályainak kliensoldali támogatása, valamint a game-service-szel való valós idejű kommunikáció.
+- **.NET 10, ASP.NET Core és ASP.NET Core Identity**  
+  Felhasználás: a platform-service HTTP API-jának és felhasználói fiókkezelésének megvalósítása.
+- **Entity Framework Core, Npgsql, FluentValidation, JSON Web Token (JWT) és Scalar**  
+  Felhasználás: adatbázis-hozzáférés és migrációk, kérésvalidáció, tokenkezelés, valamint a fejlesztői API-dokumentáció és kipróbálható API-felület biztosítása.
+- **Node.js, TypeScript, NestJS, NestJS Config, Express-adapter, Socket.IO, RxJS és reflect-metadata**  
+  Felhasználás: a game-service futtatása és konfigurálása, moduláris felépítése, valamint a játékosok valós idejű eseményeinek kezelése.
+- **node-redis (`@redis/client`), Lua, `amqplib` és chess.js**  
+  Felhasználás: az aktív játszmák Redis-állapotának kezelése és atomi Lua-szkriptek futtatása, a RabbitMQ-val történő eseményközvetítés és a sakk szabályainak ellenőrzése.
+- **Python, FastAPI, Uvicorn, python-chess és Stockfish**  
+  Felhasználás: az engine-service HTTP API-ja, a sakkállások kezelése és a számítógépes ellenfél lépéseinek kiszámítása.
+- **PostgreSQL, Redis és RabbitMQ**  
+  Felhasználás: a felhasználói és játszmaelőzmény-adatok tartós tárolása, az aktív játszmák állapotának kezelése, valamint a szolgáltatások közötti aszinkron eseményközvetítés.
+- **Envoy és nginx**  
+  Felhasználás: az Envoy a bejövő forgalom továbbítására és gateway-feladatokra, az nginx a frontend statikus fájljainak kiszolgálására szolgál.
+- **Docker, Docker Compose és Docker Buildx**  
+  Felhasználás: a szolgáltatások és adattárolók konténerizálása, a helyi rendszer összehangolt futtatása, valamint több processzor-architektúrára készülő képek buildelése.
+- **OpenSSL**  
+  Felhasználás: a helyi fejlesztői HTTPS-kapcsolathoz szükséges tanúsítványok előállítása egy konténerben.
+- **HTTP, WebSocket, AMQP és TLS**  
+  Felhasználás: a szolgáltatások szinkron HTTP-kommunikációja, a valós idejű játékmenet, az üzenetközvetítő elérése és a gateway titkosított elérése.
+- **OpenAPI, AsyncAPI és Redocly CLI**  
+  Felhasználás: a HTTP- és eseményalapú szolgáltatási szerződések leírása és lintelése.
+- **Mermaid és Markdown**  
+  Felhasználás: a rendszer- és állapotdiagramok, illetve a műszaki dokumentáció elkészítése.
+- **Vitest, React Testing Library, Testing Library DOM, jest-dom, user-event, jsdom, pytest, HTTPX és xUnit v3**  
+  Felhasználás: a frontend, a game-service, az engine-service és a platform-service automatizált egység-, komponens- és integrációs tesztelése.
+- **Testcontainers és Microsoft Testing Platform**
+  Felhasználás: tesztekhez szükséges Redis-, PostgreSQL- és RabbitMQ-példányok konténeres indítása, illetve a .NET-tesztek futtatása.
+- **ESLint, Prettier, TypeScript compiler, .NET SDK, EF Core CLI, pip és npm**  
+  Felhasználás: statikus kódellenőrzés, formázás, fordítás/buildelés, adatbázis-migrációk kezelése és függőségek telepítése.
+- **GitHub Actions és GitHub Container Registry (GHCR)**  
+  Felhasználás: a repók CI-folyamatainak futtatása, valamint a konténerképek buildelése és közzététele.
+- **Git és GitHub**  
+  Felhasználás: forráskód-verziókezelés, a különálló repók együttműködésének, a pull requesteknek és a CI-folyamatoknak a támogatása.
+- **Visual Studio és Visual Studio Code**  
+  Felhasználás: a .NET-es platform-service, a többi szolgáltatás és a dokumentáció fejlesztése, szerkesztése és tesztelése.
+- **Notepad és Notepad++**  
+  Felhasználás: egyszerű szöveges fájlok, jegyzetek és konfigurációk megtekintése, illetve szerkesztése.
+- **Microsoft Word és Adobe Acrobat (PDF)**  
+  Felhasználás: dokumentumok szerkesztése, illetve PDF-formátumú anyagok megtekintése és kezelése.
+- **Google Chrome és Brave**  
+  Felhasználás: a webes kliens és a helyben futó rendszer elérése, valamint a felület böngészőben történő ellenőrzése. A specifikáció Chrome-ra, Firefoxra és Edge-re vonatkozó támogatási elvárásait a 3.1. fejezet ismerteti.
+- **GitHub Copilot, Microsoft Copilot, Claude és Gemini**
+  Felhasználás: a fejlesztési és dokumentációs munka támogatása; az előállított kód és szöveg helyességét a fejlesztők ellenőrzik.
+
+Az Azure és a Playwright a dokumentáció készítésekor tervezett, de még nem megvalósított elemek, ezért nem szerepelnek a ténylegesen használt eszközök között.
 
 ---
 
