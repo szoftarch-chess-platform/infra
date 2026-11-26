@@ -21,13 +21,39 @@
 
 ---
 
-## Címlap - anna
+<!-- Címlap - anna -->
 
-- Rendszerterv
-- Online sakkplatform fejlesztése
-- Szoftverarchitektúrák tárgy házi feladat
-- Készítették: Borsik Balázs, Fehér Anna, Sipos Bence, Személyi Balázs András
-- Dátum
+<br><br><br>
+
+<p align="center">
+  <img src="logo.png" alt="Chess7ed logó" width="240">
+</p>
+
+<br>
+
+<h1 align="center">Rendszerterv</h1>
+
+<br><br>
+
+<p align="center">
+  Chess7ed
+  <br><br>
+  <em>Online sakkplatform fejlesztése</em>
+  <br><br>
+  <em>Szoftverarchitektúrák tárgy házi feladat</em>
+</p>
+
+<br><br><br>
+
+<p align="right">
+  Készítették:<br>
+  Borsik Balázs<br>
+  Fehér Anna<br>
+  Sipos Bence<br>
+  Személyi Balázs András
+</p>
+
+<div style="page-break-after: always;"></div>
 
 ---
 
@@ -65,43 +91,92 @@
 
 ---
 
-## 0. Követelményspecifikáció - (kész, nem tesszük bele)
-
-A `Szoft Arch Sakkplatform Specifikáció.pdf` tartalma, változatlanul:
-
-- Feladatkiírás (alapfunkciók, extra funkciók)
-- A fejlesztő csapat
-- Részletes feladatleírás
-- Funkcionális követelmények (alapfunkciók, extra funkciók)
-- Nem funkcionális követelmények (funkcionalitás, használhatóság, megbízhatóság, teljesítmény, támogathatóság)
-- Technikai paraméterek
-- Szótár
-- Use-case-ek (alapfunkciók, extra funkciók)
-
----
-
 ## 1. A rendszer célja és funkciói
 
-### 1.1 Feladatkiírás - becopyzni a kiírást (anna)
+### 1.1 Feladatkiírás
 
-> **Felelős:** közös
+A feladat célja egy webes alkalmazás megvalósítása, amely lehetővé teszi a felhasználók számára a sakkjátékok
+online lejátszását.
 
-> Kifejtendő: a feladatkiírás rövid megismétlése (1–2 bekezdés): webes sakkplatform élő és AI ellenfél elleni
-> játszmákkal, játszmaelőzményekkel. Hivatkozás a követelményspecifikációra.
+**Alapfunkciók:**
 
-### 1.2 A rendszer által biztosítandó funkciók (anna)
+- Felhasználók kezelése (regisztráció, bejelentkezés).
+- Sakkjátszma megvalósítása:
+  - interaktív sakktábla,
+  - 2 játékos közötti élő játszma lebonyolítása,
+  - szabályok betartatása (mindegyik bábu megfelelően lép stb.).
+- Korábbi játszmák eredményeinek és lépéseinek menedzsmentje.
+- AI ellenfél (nem bonyolult motor pl. minimax algoritmus).
 
-> **Felelős:** közös
+**Extra funkciók (min 1 választandó):**
 
-> Kifejtendő: a ténylegesen megvalósított funkciók listája (a mintában ez a dokumentum-életciklus).
-> Javasolt bontás a felhasználó útja szerint:
->
-> - fiókkezelés: regisztráció, bejelentkezés, kijelentkezés, munkamenet frissítése
-> - játszma indítása: párosítás véletlen ellenféllel (várósor), játék AI ellen
-> - játszma lebonyolítása: interaktív tábla, szabályos lépések kiemelése, speciális lépések
-> (sáncolás, en passant, gyalogátváltoztatás), sakkóra, játszma vége (matt, patt, feladás, idő stb.)
-> - játszmaelőzmények: lapozható lista, játszma visszajátszása lépésenként
-> - a megvalósított extra funkciók megjelölése (pl. sakkóra), a meg nem valósítottak a 6. fejezetbe kerülnek
+- Élő-pontrendszer helyes implementálása (Wikipedia).
+- Sáncolás, gyalogátváltoztatás bevezetése.
+- Egyéb, közös megegyezés alapján.
+
+### 1.2 A rendszer által biztosítandó funkciók
+
+A rendszer célja, hogy a felhasználók böngészőből, valós időben játszhassanak sakkjátszmákat egy másik
+felhasználó vagy a gépi ellenfél ellen, és később visszanézhessék a lejátszott játszmáikat.A feladatkiírás extra funkciói közül a sáncolást és a gyalogátváltoztatást, továbbá a sakkórát valósítottuk meg.
+
+A felhasználó ezeket a funkciókat éri el a felületen:
+
+- **felhasználói fiók** kezelése:
+  - regisztráció felhasználónévvel, e-mail-címmel és jelszóval
+  - bejelentkezés felhasználónévvel és jelszóval 
+  - kijelentkezés
+- **kétféle játékmód**:
+  - élő játszma egy másik felhasználó ellen
+  - játszma a gépi ellenfél ellen
+- **a játszma lejátszása**:
+  - a színeket mindkét esetben véletlenszerűen sorsolja a rendszer
+  - egy felhasználónak egyszerre csak egy játszmája lehet
+  - lépések az interaktív táblán, ahol egy bábu kiválasztásakor a tábla kiemeli azok szabályos lépéseit
+  - a sakkóra mindkét játékosnak 10 percet ad a teljes játszmára, és mindkét játékosnál szinkronban jár
+  - a játszmát bármikor fel lehet adni
+  - megszakadt kapcsolat vagy az oldal újratöltése után a játszma ott folytatódik ahol abbamaradt
+- **a játszma vége**:
+  - győzelem: matt, feladás, az ellenfél idejének lejárta
+  - döntetlen: patt, háromszori ismétlés, ötvenlépéses szabály, anyaghiány, vagy az idő lejárta
+  - megszakadás: ha a gépi ellenfél nem válaszol
+- **korábbi játszmák megtekintése**:
+  - a játszmák listájában látható az ellenfél, szín, eredmény, dátum és a megtett lépések listája
+  - a megtett lépések vizuálisan visszajátszhatóak a táblán
+
+A funkciókat és a szereplőket az alábbi use-case diagram foglalja össze. A Vendég csak regisztrálni és bejelentkezni tud, a többi funkciót a bejelentkezett Felhasználó éri el.
+
+```mermaid
+flowchart LR
+    guest(["Vendég"])
+    user(["Felhasználó"])
+
+    subgraph system["Online sakkplatform"]
+        register("Regisztráció")
+        login("Bejelentkezés")
+        logout("Kijelentkezés")
+        live("Élő játszma egy másik<br/>felhasználó ellen")
+        bot("Játszma a gépi<br/>ellenfél ellen")
+        move("Lépés")
+        resign("Feladás")
+        history("Korábbi játszmák<br/>listázása")
+        replay("Játszma<br/>visszajátszása")
+    end
+
+    guest --- register
+    guest --- login
+    user --- logout
+    user --- live
+    user --- bot
+    user --- history
+
+    live -.->|"«include»"| move
+    bot -.->|"«include»"| move
+    resign -.->|"«extend»"| live
+    resign -.->|"«extend»"| bot
+    replay -.->|"«extend»"| history
+```
+
+*A rendszer use-case diagramja*
 
 ---
 
@@ -254,16 +329,53 @@ Megjelenése a kódban az infra repó `envoy/envoy.yaml` fájlja. A konfiguráci
 
 #### 2.2.2 Webes kliens (frontend) - Anna
 
-> **Felelős:** frontend
+Célja, hogy a felhasználó böngészőből érje el a rendszer minden funkcióját. A felelősségei a következők.
 
-> Kifejtendő:
->
-> - React + TypeScript + Vite SPA, nginx szolgálja ki
-> - mappaszerkezet / modulok (auth, lobby, game, api, routing, theme)
-> - állapotkezelés (TanStack Query a szerveradatokhoz, élő játszma állapota)
-> - sakktábla-komponens és lépésellenőrzés a kliensen
-> - útvonalak és oldalak (részletesen a 2.9-ben)
-> - kommunikáció: REST a platform-service felé, Socket.IO a game-service felé
+- Megjeleníti az oldalakat, és a bejelentkezéstől függően engedi vagy irányítja át a felhasználót.
+- A platform-service REST API-ján kezeli a fiókot, és lekéri a játszmaelőzményeket.
+- A game-service-el Socket.IO-kapcsolatot tart amíg a felhasználó be van jelentkezve, és ennek eseményeiből vezeti az élő játszma állapotát.
+- Megjeleníti a sakktáblát, kiemeli a kiválasztott bábu szabályos lépéseit, és elküldés előtt ellenőrzi a lépést. A lépésről végül mindig a game-service dönt.
+- Visszajátssza a befejezett játszmákat.
+
+A választott technológia a React 19 TypeScripttel, a Vite build-eszközzel. A fő könyvtárakat az alábbi táblázat mutatja.
+
+| Könyvtár | Felhasználás |
+|---|---|
+| React Router 8 | az útvonalak és a bejelentkezéshez kötött oldalak |
+| TanStack Query 5 | a REST API-ból kapott adatok gyorsítótárazása és frissítése |
+| Zustand | az élő játszma állapota |
+| socket.io-client | a kapcsolat a game-service-szel |
+| chess.js | a szabályos lépések, a lépés ellenőrzése, a visszajátszás |
+| react-chessboard | a sakktábla |
+| Chakra UI 3 | a komponensek és a téma |
+
+A szerveradatok és az élő játszma állapota külön eszközt kapott, mert másképp változnak. A REST-adatokat a kliens lekéri és gyorsítótárazza, ezt a TanStack Query kész megoldással adja. Az élő játszmát viszont a szerver eseményei folyamatosan módosítják, és ezek React-komponenseken kívül is érkeznek, ezért egyetlen Zustand-tárolóba kerülnek. A komponensek csak a nekik szükséges részt olvassák, így az idő múlása csak a sakkórát rajzolja újra.
+
+A belső felépítés rétegekre bomlik. Az oldalak és a komponensek a szolgáltatásokat saját interfészeken keresztül érik el.
+
+```mermaid
+flowchart TD
+    pages["<b>Oldalak és komponensek</b><br/>pages, lobby, game, auth, layout"]
+    state["<b>Állapot</b><br/>TanStack Query, Zustand-tároló"]
+    api["<b>Saját interfészek</b><br/>AuthApi, GamesApi, GameSocket"]
+    real["<b>Kliensek</b><br/>HTTP-kliens, socket.io-client"]
+
+    pages --> state --> api --> real
+```
+
+*A frontend rétegei*
+
+| Mappa | Tartalom |
+|---|---|
+| `pages` | az oldalak, az útvonalakat a 2.9 fejezet sorolja fel |
+| `auth`, `lobby`, `game`, `layout` | az oldalak részei, például az űrlapok, a sakktábla, a sakkóra és az élő játszma tárolója |
+| `api` | a szolgáltatások interfészei, a klienseik és a szerződések típusai |
+| `routing` | a bejelentkezéshez kötött oldalak őrei |
+| `app`, `theme` | a közös beállítások, a gyorsítótár és a téma |
+
+A kliens minden kérést relatív címre küld, így ugyanaz a build minden környezetben működik. A konténerképben egy nem root felhasználóként futó nginx szolgálja ki a statikus fájlokat, és minden ismeretlen útvonalra az `index.html`-t adja vissza, így egy oldal közvetlen linkről is betölt. Az interfészeket a 2.3, a tokenek kezelését a 2.5, az oldalakat a 2.9 fejezet írja le.
+
+Megjelenése a kódban a frontend repó `src` mappája.
 
 #### 2.2.3 platform-service (ASP.NET Core) - Sz.B.
 
@@ -456,17 +568,164 @@ Az éles környezetben a platform-service-nek csak egy kapcsolati karakterláncr
 
 ### 2.3 Szolgáltatások közötti kommunikáció és interfészek - Anna
 
-> **Felelős:** közös (áttekintő táblázat, konvenciók) + a saját interfészét minden szolgáltatás: platform-service (REST végpontok), game-service (Socket.IO események, „befejezett játszma” esemény), engine-service (HTTP API)
+Ez a fejezet azt írja le, hogy a rendszer komponensei milyen interfészeken és milyen protokollokon kommunikálnak egymással. A 2.1 fejezet konténerdiagramja mutatja, hogy ki kivel áll kapcsolatban. A 2.4 fejezet telepítési diagramjai a kapcsolatok protokollját ebből a táblázatból veszik.
 
-> Kifejtendő:
->
-> - kommunikációs módok táblázatban: ki kivel, milyen protokollon, szinkron/aszinkron
-> (REST, Socket.IO/WSS, HTTP az engine felé, AMQP). A dokumentumban csak itt szerepel ez a táblázat,
-> a 2.4 telepítési diagramjai erre hivatkoznak.
-> - szerződésalapú fejlesztés: OpenAPI és AsyncAPI leírások az `infra/contracts` mappában, konvenciók
-> - a fő REST végpontok rövid táblázata (útvonal, metódus, leírás)
-> - a fő Socket.IO események táblázata
-> - a „befejezett játszma” esemény szerkezete
+| Kezdeményező | Fogadó | Protokoll | Mód | Tartalom |
+|---|---|---|---|---|
+| böngésző | frontend, az Envoyon keresztül | HTTPS | szinkron | a React alkalmazás statikus fájljai |
+| böngésző | platform-service, az Envoyon keresztül | REST, JSON, HTTPS-en | szinkron | fiókkezelés, munkamenetek, játszmaelőzmények |
+| böngésző | game-service, az Envoyon keresztül | Socket.IO, WSS-en | kétirányú, aszinkron események nyugtázással | párosítás, élő játszma |
+| game-service | engine-service | REST, JSON, HTTP-n | szinkron | a gépi ellenfél lépése |
+| game-service | platform-service, a RabbitMQ-n keresztül | AMQP 0.9.1 | aszinkron | a befejezett játszmák |
+| game-service | Redis | RESP | szinkron | a futó játszmák állapota, a párosítási sor és a még el nem küldött események |
+| platform-service | PostgreSQL | a PostgreSQL saját protokollja | szinkron | felhasználók, munkamenetek, játszmaelőzmények |
+
+A böngészőből érkező minden kapcsolat az API Gatewayen keresztül megy, ezt a 2.2.1 fejezet írja le. A szolgáltatások egymást a Docker Compose szolgáltatásnevén érik el, így külön szolgáltatásfelderítésre nincs szükség. A szinkron és az aszinkron kapcsolat választásának okát a 2.1 fejezet írja le. A platform-service-nek nincs belső végpontja, a játszmákat csak a RabbitMQ-n keresztül kapja meg, így nem kell olyan hívót hitelesítenie, amely nem a gatewayen keresztül érkezik.
+
+#### 2.3.1 Szerződések
+
+A szolgáltatások három nyelven készülnek, és párhuzamosan fejlesztettük őket, ezért az interfészeiket szerződésalapon, design-first módon készítettük. 
+
+| Szerződés | Interfész | Szolgáltató | Fogyasztó |
+|---|---|---|---|
+| `platform-service.openapi.yaml` | REST API az `/api` alatt | platform-service | frontend |
+| `game-service.asyncapi.yaml` | Socket.IO-események a `/ws/game` útvonalon | game-service | frontend |
+| `engine-service.openapi.yaml` | a gépi lépés kérése | engine-service | game-service |
+| `game-events.asyncapi.yaml` | események a RabbitMQ-n | game-service | platform-service |
+| `shared-schemas.yaml` | a több szerződésben használt sémák | | |
+
+A HTTP API-kat OpenAPI 3.1 [31], a Socket.IO-eseményeket és a RabbitMQ-üzeneteket AsyncAPI 3.1 [32] formátumban írtuk le. A sémák csak a JSON Schema azon kulcsszavait használják, amelyeket mindkét formátum ismer, így mindkettő hivatkozhat a közös sémafájlra. Az AsyncAPI-nak nincs Socket.IO-kötése, ezért a game-service szerződésében egy kliensesemény fogadó műveletként, egy szerveresemény küldő műveletként szerepel, egy esemény nyugtája pedig a művelet válasza. Minden szerződést a Redocly CLI [33] ellenőriz rögzített verzióval, `npx`-en keresztül, így a parancs minden fejlesztő gépén ugyanúgy fut.
+
+Minden szerződés szemantikus verziót kap.  Minden kéréshez, válaszhoz és üzenethez tartozik példa a szerződésben. A szerződések közös adatkonvenciókat követnek, így ugyanaz a játszma ugyanúgy néz ki a Socket.IO-eseményekben, a RabbitMQ-üzenetben és a játszmaelőzmények API-jában.
+
+#### 2.3.2 A platform-service REST API-ja
+
+Célja, hogy a webes kliens elérje a fiókkezelést és a befejezett játszmákat. Egyetlen fogyasztója a frontend, ami a gatewayen keresztül, JSON-ban hívja. 
+
+| Végpont | Leírás | Access token |
+|---|---|---|
+| `POST /api/auth/register` | regisztráció felhasználónévvel, e-mail-címmel és jelszóval, utána a felhasználó be is van jelentkezve | nem kell |
+| `POST /api/auth/login` | bejelentkezés felhasználónévvel és jelszóval | nem kell |
+| `POST /api/auth/refresh` | a refresh token cseréje és új access token kiadása | nem kell |
+| `POST /api/auth/logout` | a munkamenet visszavonása és a cookie-k törlése | nem kell |
+| `GET /api/users/me` | a bejelentkezett felhasználó azonosítója és neve | kötelező |
+| `GET /api/games` | a felhasználó befejezett játszmái lapozva, a legújabbal kezdve | kötelező |
+| `GET /api/games/{gameId}` | egy befejezett játszma a lépéseivel | kötelező |
+
+A bejelentkezés, a regisztráció és a frissítés a tokeneket HttpOnly cookie-ban adja vissza, ezért a kliens a felhasználót a `GET /api/users/me` végpontról kérdezi le. A tokeneket, a cookie-kat és a frissítés menetét a 2.5 fejezet írja le.
+
+A `GET /api/games` a `page` és a `pageSize` paramétert fogadja, egy oldalon alapértelmezetten 20, legfeljebb 100 játszma van. A válasz az oldal játszmáit, a lapozás adatait és a játszmák teljes számát tartalmazza. A végpontok hibaválaszait a 2.2.3 fejezet sorolja fel.
+
+```json
+{
+  "items": [
+    {
+      "id": "0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f",
+      "variant": "standard",
+      "white": { "kind": "user", "userId": "0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f", "name": "alice" },
+      "black": { "kind": "user", "userId": "0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b", "name": "bob" },
+      "result": "whiteWon",
+      "reason": "checkmate",
+      "startedAt": "2026-11-20T14:01:40.120Z",
+      "endedAt": "2026-11-20T14:03:12.345Z"
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "totalCount": 1
+}
+```
+
+*Egy oldal a játszmaelőzményekből, a `GET /api/games` válasza*
+
+#### 2.3.3 A game-service Socket.IO-eseményei
+
+Célja, hogy a kliens és a game-service valós időben, mindkét irányban küldhessen eseményeket egy élő játszma alatt. A szerver azonnal továbbítja az ellenfél lépését, a gépi lépést és a játszma végét, a kliensnek nem kell rendszeresen lekérdeznie az állapotot. A kliens a Socket.IO 4 [38] klienst használja az alapértelmezett névtérrel, a `/ws/game` útvonalon és csak WebSocket-átvitellel. Az access tokent a böngésző a kézfogáskor a cookie-ban küldi, és a gateway ellenőrzi, ennek részleteit a 2.5 fejezet írja le.
+
+Minden esemény egyetlen JSON-objektumot visz. A kliens minden eseményét nyugtázást kérve küldi, és a nyugta vagy sikeres, vagy egy hibakóddal együtt elutasító. 
+
+A kliens eseményei a következők.
+
+| Esemény | Tartalom | Hatása | Lehetséges hibakódok |
+|---|---|---|---|
+| `joinQueue` | üres | a felhasználó beáll a párosítási sorba, és ha van ellenfél, mindkettőjük `gameStarted` eseményt kap | `alreadyInQueue`, `alreadyInGame` |
+| `leaveQueue` | üres | a felhasználó kilép a sorból | `notInQueue` |
+| `startBotGame` | üres | azonnal elindul egy játszma a gépi ellenfél ellen | `alreadyInQueue`, `alreadyInGame` |
+| `makeMove` | a játszma azonosítója és a lépés UCI-jelöléssel | a game-service ellenőrzi és végrehajtja a lépést | `gameNotFound`, `notYourTurn`, `illegalMove` |
+| `resign` | a játszma azonosítója | a felhasználó feladja a játszmát | `gameNotFound` |
+| `getState` | üres | a nyugta megmondja, hogy a felhasználó vár-e a sorban, és visszaadja a folyamatban lévő játszmáját | |
+
+A szerver eseményei a következők.
+
+| Esemény | Mikor érkezik | Tartalom |
+|---|---|---|
+| `gameStarted` | egy új játszma kezdetekor | a játszma azonosítója, a két játékos, az időkontroll, a kezdés ideje, a lépések, az állás FEN-ben és a sakkóra |
+| `moveMade` | minden elfogadott lépés után, a gépi lépéseket is beleértve | a játszma azonosítója, a lépés, az új állás FEN-ben és a sakkóra |
+| `gameEnded` | a játszma végén | a játszma azonosítója, az eredmény, a játszma végének oka és a sakkóra |
+
+Egy felhasználónak több kapcsolata is lehet, például több böngészőfülön. A szerver eseményei a felhasználó minden kapcsolatára megérkeznek, a lépést küldő kapcsolatot is beleértve, és a felhasználó bármelyik kapcsolatáról léphet. Ha egy lépés vetett véget a játszmának, a `moveMade` a `gameEnded` előtt érkezik. Egy esemény nyugtája és az általa kiváltott szerveresemény tetszőleges sorrendben érkezhet. Az újracsatlakozást a `getState` eseménnyel a 2.7 fejezet írja le.
+
+```json
+{
+  "gameId": "0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f",
+  "move": "e7e5",
+  "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+  "clock": { "whiteMs": 596210, "blackMs": 581950, "running": "white" }
+}
+```
+
+*Egy `moveMade` esemény tartalma*
+
+#### 2.3.4 Az engine-service HTTP API-ja
+
+Célja, hogy a game-service megkapja a gépi ellenfél lépését egy adott állásra. Egyetlen végpontja a `POST /moves`, amely az állást FEN-ben és opcionálisan a játékváltozatot kapja, és a lépést UCI-jelöléssel adja vissza.
+
+```json
+{ "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1", "variant": "standard" }
+```
+
+```json
+{ "move": "e7e5" }
+```
+
+*A `POST /moves` kérése és válasza*
+
+A hívás szinkron, mert a játszma a gépi lépés nélkül nem folytatódhat. A szerződés szerint a válasz 10 másodpercen belül megérkezik. Ugyanaz az állás bármikor újra lekérdezhető, így a hívó egy sikertelen kérést biztonságosan megismételhet, és a game-service ezt egyszer meg is teszi.
+
+A 400-as válasz hibás kérést vagy szabálytalan állást, a 422-es azt jelzi, hogy a soron következő félnek nincs szabályos lépése, vagy a játékváltozat nem támogatott. Ezekre ugyanaz a kérés ugyanazt a választ kapná, ezért nem érdemes megismételni őket. Az 500-as válasz a motor hibáját jelzi. Ha az ismételt kérés is sikertelen, a játszma megszakad, ahogy a 2.7 fejezet leírja.
+
+Az API-nak nincs hitelesítése, és nem olvassa az identitásfejléceket. Az engine-service egy belső Docker-hálózaton van, amelyen csak a game-service éri el, a gatewaynek pedig nincs felé útvonala. 
+
+#### 2.3.5 A befejezett játszma eseménye
+
+Célja, hogy a game-service minden befejezett játszmát átadjon a platform-service-nek akkor is, ha az éppen nem fut. Az esemény a `game.events` topic exchange-re kerül `game.finished` routing key-jel, és a platform-service a saját `platform.game-finished` sorából fogadja. A gépi ellenfél elleni és a megszakadt játszmák is eseményt kapnak.
+
+Az esemény egy közös borítékban utazik, amely az esemény azonosítójából, a verziót is tartalmazó típusából, a küldőből és az időpontból áll, a `data` mezőben pedig maga a befejezett játszma van a teljes lépéslistával.
+
+```json
+{
+  "id": "0193c2c0-1a2b-7c3d-8e4f-5a6b7c8d9e0f",
+  "type": "game.finished.v1",
+  "source": "game-service",
+  "time": "2026-11-20T14:03:12.345Z",
+  "data": {
+    "gameId": "0193c2bf-0a1b-7c2d-9e3f-4a5b6c7d8e9f",
+    "variant": "standard",
+    "white": { "kind": "user", "userId": "0193c2b4-7d3e-7c2a-9f1e-3b5a6c7d8e9f", "name": "alice" },
+    "black": { "kind": "user", "userId": "0193c2b5-1f2e-7d3c-8b4a-5c6d7e8f9a0b", "name": "bob" },
+    "result": "whiteWon",
+    "reason": "checkmate",
+    "moves": ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4", "g8f6", "h5f7"],
+    "timeControl": { "initialMs": 600000 },
+    "startedAt": "2026-11-20T14:01:40.120Z",
+    "endedAt": "2026-11-20T14:03:12.345Z"
+  }
+}
+```
+
+*Egy `game.finished.v1` esemény, amelyben a világos mattal nyert*
+
+A kézbesítés legalább egyszeri. A game-service az eseményt előbb egy outboxba írja, ez a transactional outbox minta [39], a platform-service pedig az esemény azonosítója alapján kiszűri az ismételt kézbesítést. A broker beállításait a 2.2.8 fejezet, az átadás és a mentés menetét a 2.6 fejezet írja le.
 
 ### 2.4 Telepítési diagram **[ÚJ] - Sz.B.**
 
@@ -666,17 +925,168 @@ A `.env` fájl `COMPOSE_FILE` változója adja meg, hogy a `docker compose` para
 
 ### 2.6 Fő folyamatok - Anna
 
-> **Felelős:** folyamatonként, lásd a listát
+Ez a fejezet a rendszer öt fő folyamatát mutatja be szekvenciadiagramokon. Az ábrák csak a komponensek közötti üzeneteket mutatják, az interfészek tartalmát a 2.3, a tokeneket a 2.5, a játszma szabályait és állapotait a 2.7 fejezet írja le.
 
-> Kifejtendő: szekvenciadiagramok és rövid magyarázat az alábbiakhoz:
->
-> 1. Regisztráció és bejelentkezés, hitelesített kérés – *platform-service* (+ infra, frontend)
-> 2. Párosítás és élő játszma két játékos között – *game-service* (+ frontend)
-> 3. Élő játszma AI ellen – *game-service* + *engine-service*
-> 4. Befejezett játszma átadása és mentése (outbox, sor, idempotens feldolgozás) – *game-service* + *platform-service*
-> 5. Játszmaelőzmények lekérdezése és visszajátszás – *platform-service* + *frontend*
->
-> `id emég be lehetne rakni egy usecase-t?`
+#### 2.6.1 Bejelentkezés és hitelesített kérés
+
+```mermaid
+sequenceDiagram
+    participant B as Böngésző
+    participant E as Envoy
+    participant P as platform-service
+    participant DB as PostgreSQL
+
+    B->>E: POST /api/auth/login
+    E->>E: origin ellenőrzése, rate limit
+    E->>P: továbbítás
+    P->>DB: jelszó ellenőrzése, munkamenet mentése
+    P-->>B: 200, access és refresh token cookie-ban
+
+    B->>E: GET /api/games, access token cookie-ban
+    E->>E: a token ellenőrzése
+    E->>P: kérés x-user-id és x-user-name fejléccel
+    P-->>B: 200
+
+    Note over B,E: Az access token lejárt.
+    B->>E: GET /api/games
+    E-->>B: 401
+    B->>E: POST /api/auth/refresh, refresh token cookie-ban
+    E->>P: továbbítás
+    P->>DB: refresh token cseréje
+    P-->>B: 200, új tokenek cookie-ban
+    B->>E: a kérés megismétlése
+```
+
+*Bejelentkezés, hitelesített kérés és a tokenek frissítése*
+
+A regisztráció ugyanígy zajlik, csak előtte létrejön a fiók. A tokeneket a gateway ellenőrzi, a platform-service csak az identitásfejlécekből ismeri meg a felhasználót. Ha a frissítés is 401-et ad, a felhasználónak újra be kell jelentkeznie.
+
+#### 2.6.2 Párosítás és élő játszma két játékos között
+
+```mermaid
+sequenceDiagram
+    participant A as Böngésző, 1. játékos
+    participant C as Böngésző, 2. játékos
+    participant G as game-service
+    participant R as Redis
+
+    Note over A,G: A Socket.IO-kapcsolatok a gatewayen keresztül épülnek fel.
+    A->>G: joinQueue
+    G->>R: beállás a sorba
+    G-->>A: nyugta
+    C->>G: joinQueue
+    G->>R: párosítás és a játszma létrehozása
+    G-->>C: nyugta
+    G-)A: gameStarted
+    G-)C: gameStarted
+
+    loop amíg a játszma tart
+        A->>G: makeMove
+        G->>G: a lépés és az óra ellenőrzése
+        G->>R: a lépés mentése
+        G-->>A: nyugta
+        G-)A: moveMade
+        G-)C: moveMade
+    end
+
+    G->>R: a játszma lezárása és az esemény az outboxba
+    G-)A: gameEnded
+    G-)C: gameEnded
+```
+
+*Párosítás és élő játszma*
+
+A game-service a sorban legrégebben váró felhasználót párosítja az új jelentkezővel, és véletlenszerűen sorsolja a színeket. A Redis-műveletek atomiak, így két egyszerre érkező esemény sem hoz létre két játszmát, és egy elavult lépést sem fogad el. A lépés szabályosságáról mindig a game-service dönt. A játszma végét a 2.6.4 folyamat viszi tovább.
+
+#### 2.6.3 Játszma a gépi ellenfél ellen
+
+```mermaid
+sequenceDiagram
+    participant U as Böngésző
+    participant G as game-service
+    participant R as Redis
+    participant EN as engine-service
+
+    U->>G: startBotGame
+    G->>R: a játszma létrehozása
+    G-->>U: nyugta
+    G-)U: gameStarted
+
+    U->>G: makeMove
+    G->>R: a lépés mentése
+    G-->>U: nyugta
+    G-)U: moveMade
+    G->>EN: POST /moves az új állással
+    EN-->>G: a gépi lépés
+    G->>R: a gépi lépés mentése
+    G-)U: moveMade
+
+    alt az ismételt kérés is sikertelen
+        G->>R: a játszma lezárása megszakadtként
+        G-)U: gameEnded
+    end
+```
+
+*Játszma a gépi ellenfél ellen*
+
+A gépi lépést a game-service a felhasználó lépésének nyugtázása után, attól függetlenül kéri el, így a nyugta nem vár a motorra. Ha a gép világossal játszik, az első lépését rögtön a játszma kezdete után kéri. Ha a játszma közben véget ért, például feladással, a későn érkező gépi lépést eldobja.
+
+#### 2.6.4 A befejezett játszma átadása és mentése
+
+```mermaid
+sequenceDiagram
+    participant G as game-service
+    participant R as Redis
+    participant MQ as RabbitMQ
+    participant P as platform-service
+    participant DB as PostgreSQL
+
+    G->>R: a játszma lezárása és az esemény az outboxba, egy tranzakcióban
+    G->>MQ: game.finished.v1, mandatory jelzővel
+    MQ-->>G: publisher confirm
+    G->>R: az esemény törlése az outboxból
+
+    MQ->>P: kézbesítés a platform.game-finished sorból
+    P->>DB: a játszma mentése, ha még nincs feldolgozva
+    P->>MQ: nyugtázás a tranzakció után
+
+    alt a broker nem érhető el, vagy nincs kötött sor
+        Note over G,R: Az esemény az outboxban marad, és a game-service később újraküldi.
+    else az esemény már fel van dolgozva
+        P->>MQ: nyugtázás változtatás nélkül
+    else az üzenet érvénytelen
+        MQ->>MQ: a platform.game-finished.dlq sorba kerül
+    end
+```
+
+*A befejezett játszma útja a game-service-től az adatbázisig*
+
+A játszma lezárása és az esemény outboxba írása egy tranzakcióban történik, így egy lezárt játszma eseménye nem veszhet el. Az esemény csak a broker megerősítése után kerül ki az outboxból, a platform-service pedig csak a mentés után nyugtáz. Így a kézbesítés legalább egyszeri, és az ismételt kézbesítést a platform-service az esemény azonosítója alapján szűri ki.
+
+#### 2.6.5 Játszmaelőzmények és visszajátszás
+
+```mermaid
+sequenceDiagram
+    participant B as Böngésző
+    participant E as Envoy
+    participant P as platform-service
+    participant DB as PostgreSQL
+
+    B->>E: GET /api/games?page=1
+    E->>P: kérés identitásfejlécekkel
+    P->>DB: a felhasználó játszmái, a legújabbal kezdve
+    P-->>B: egy oldal a játszmákból
+
+    B->>E: GET /api/games/{gameId}
+    E->>P: kérés identitásfejlécekkel
+    P->>DB: a játszma a lépéseivel
+    P-->>B: a játszma vagy 404
+    B->>B: a lépések visszajátszása chess.js-sel
+```
+
+*Játszmaelőzmények lekérdezése és visszajátszás*
+
+A platform-service csak a bejelentkezett felhasználó játszmáit adja vissza, egy másik felhasználó játszmájára 404-et válaszol. A lépések UCI-jelöléssel érkeznek. A frontend a chess.js-sel visszajátssza őket, így lépésenként mutatja az állást a táblán, a lépéslistát pedig algebrai jelöléssel.
 
 ### 2.7 A játszma állapotai **[ÚJ] - Sipos Bence**
 
@@ -1443,3 +1853,33 @@ docker compose down --volumes
 
 [30] A Docker Desktop telepítése macOS-re\
 <https://docs.docker.com/desktop/setup/install/mac-install/>
+
+> Anna forrásai a 2.3 fejezetből. A [18] és a [26] fent már szerepel.
+
+[31] OpenAPI Specification 3.1\
+<https://spec.openapis.org/oas/v3.1.1.html>
+
+[32] AsyncAPI Specification 3.1.0\
+<https://www.asyncapi.com/docs/reference/specification/v3.1.0>
+
+[33] A Redocly CLI\
+<https://github.com/Redocly/redocly-cli>
+
+[34] Martin Fowler, Tolerant Reader\
+<https://martinfowler.com/bliki/TolerantReader.html>
+
+[35] RFC 3339, Date and Time on the Internet\
+<https://www.rfc-editor.org/rfc/rfc3339>
+
+[36] Forsyth–Edwards-jelölés, Chess Programming Wiki\
+<https://www.chessprogramming.org/Forsyth-Edwards_Notation>
+
+[37] A UCI protokoll, Chess Programming Wiki\
+<https://www.chessprogramming.org/UCI>
+
+[38] A Socket.IO dokumentációja, események nyugtázással\
+<https://socket.io/docs/v4/emitting-events/#acknowledgements>
+
+[39] microservices.io, a transactional outbox minta\
+<https://microservices.io/patterns/data/transactional-outbox>
+
