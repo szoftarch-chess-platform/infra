@@ -265,12 +265,11 @@ Minden szolgáltatás a saját repójának CI-folyamatában építi a konténerk
 
 Egy monolit egyszerűbb lett volna, mert nem kellene hozzá gateway, üzenetközvetítő és szolgáltatások közötti szerződés. A sakkmotor és a valós idejű kapcsolatok azonban ugyanazokon az erőforrásokon osztoznának a felhasználókezeléssel, és a rendszert csak egészében lehetne skálázni. A szerződéseket a szolgáltatók saját repójában is tarthattuk volna, de akkor minden fogyasztónak egy másik szolgáltatás repójában kellene keresnie őket, ezért kerültek a közös infra repóba.
 
-### 2.2 Komponensek - S.B. 
+### 2.2 Komponensek.
+
+A rendszer komponensei jól elkülönülő felelősségeket látnak el: a frontend biztosítja a böngészős felületet, az Envoy az egyetlen külső belépési pont, a platform-service a felhasználói fiókokat és a játszmaelőzményeket kezeli, a game-service pedig a valós idejű játékmenetért felel. Az engine-service számítja a gépi ellenfél lépéseit; a PostgreSQL, a Redis és a RabbitMQ rendre a tartós adatokat, az aktív játszmák állapotát és az aszinkron eseményátadást támogatja. Az alfejezetek bemutatják az egyes komponensek célját, felelősségeit, technológiai választásait és indoklását, valamint – ahol ez segíti a megértést – belső felépítésüket és kapcsolataikat.
 
 > **Felelős:** lásd az alfejezeteket
-
-> Minden komponensnél a mintához hasonló szerkezet: **Célja**, **Felelősségei**, **Technológia és indoklás**,
-> **Belső felépítése** (ha van), **ábra** (ha van).
 
 #### 2.2.1 API gateway (Envoy) - Sz.B
 
@@ -506,16 +505,30 @@ A `GameFinishedConsumer` egyszerre egy üzenetet dolgoz fel a befejezett játszm
 > - a befejezett játszma átadása (outbox + RabbitMQ)
 > - sakkszabályok ellenőrzése külső könyvtárral
 
-#### 2.2.5 engine-service (Python) S.B.
+#### 2.2.5 engine-service (Python).
 
 > **Felelős:** engine-service
 
-> Kifejtendő:
->
-> - felelősség: gépi lépés számítása egy adott állásra
-> - a választott sakkmotor és indoklása, nehézségi szint(ek)
-> - webes keretrendszer, HTTP API
-> - állapotmentesség → külön skálázható
+Az engine-service-t a game-service szinkron HTTP-szolgáltatásként használja: egy megadott FEN-állásból kiszámítja a gépi ellenfél következő lépését. Nem tárol játszmaállapotot, nem módosítja a játszmát és nem kommunikál közvetlenül a böngészővel; a visszakapott lépést a game-service ellenőrzi és alkalmazza.
+
+Az API egyetlen művelete a `POST /moves`. A kérés `fen` mezőt és opcionális, alapértelmezésben `standard` értékű `variant` mezőt tartalmaz; a válasz a lépést UCI-jelöléssel adja vissza, például `e2e4` formában. A hibás kérés vagy érvénytelen FEN 400-as, a nem támogatott változat vagy lépés nélküli állás 422-es, a sakkmotor hibája 500-as választ eredményez. Az API-szerződés legfeljebb 10 másodperces választ ír elő. A game-service 15 másodperces kliensoldali időkorláttal dolgozik, és az időtúllépést vagy szerverhibát egyszer újrapróbálja; a 400-as és 422-es válaszokat nem ismétli. Nincs 504-es válasz a szolgáltatás szerződésében.
+
+A FastAPI kezeli a HTTP API-t, a Pydantic modellek validálják a kérést és a választ, az Uvicorn futtatja az alkalmazást. A python-chess ellenőrzi a FEN-t és kommunikál a Stockfish-el annak szabványos UCI protokollján keresztül. A Stockfish a konténerben, külön folyamatként fut. A gépi ellenfél egyetlen rögzített erősséggel játszik: a keresési mélység alapértelmezése 10, a számítás legfeljebb 8,5 másodperc. Nehézségi fokozatok nincsenek.
+
+```mermaid
+flowchart LR
+    game["game-service"] -->|"POST /moves: FEN, variant"| api["FastAPI<br/>Pydantic-validáció"]
+    api --> position["FEN és állás ellenőrzése<br/>python-chess"]
+    position -->|"UCI"| stockfish["Stockfish<br/>UCI-folyamat"]
+    stockfish -->|"UCI-lépés"| api
+    api -->|"JSON: move"| game
+```
+
+*Az engine-service lépéskérése.*
+
+A szolgáltatás Python 3.14-alapú, hivatalos Debian slim konténerképből épül, és nem root felhasználóként fut. Az engine-service csak a game-service-szel közös, belső Docker-hálózaton érhető el; a gateway nem továbbít rá külső kérést. A `GET /health` végpontot a Compose health checkje használja. Az alkalmazás a játszmaállapot szempontjából állapotmentes, ezért több példányra osztható, de a jelenlegi Compose egy példányt futtat. Egy példányban egy Stockfish-folyamat dolgozik, amely a kéréseket egymás után szolgálja ki; a várakozás legfeljebb egy másodperc, ezért a párhuzamos terhelés további motorpéldányokat vagy külön terheléselosztást igényel.
+
+A megvalósítás az engine-service repó `engine_service` mappájában található. Az API szerződése az infra repó `contracts/engine-service.openapi.yaml` fájlja.
 
 #### 2.2.6 PostgreSQL (relációs adatbázis) - Sz.B.
 
@@ -908,20 +921,83 @@ A `.env` fájl `COMPOSE_FILE` változója adja meg, hogy a `docker compose` para
 > - a helyi és az Azure-környezet különbségei táblázatban (komponens – helyben – Azure-ban)
 > - költségek: a választott díjcsomagok, becsült havi költség, hallgatói kredit (pl. Azure for Students)
 
-### 2.5 Hitelesítés és biztonság - S.B.
+### 2.5 Hitelesítés és biztonság.
 
 > **Felelős:** platform-service (tokenek, jelszavak, validáció) + infra (Envoy: tokenellenőrzés, rate limiting) + frontend (cookie-k, frissítés, kliensoldali validáció)
 
-> Kifejtendő:
->
-> - access és refresh token, tárolás cookie-ban, frissítés, kijelentkezés
-> - a tokenek ellenőrzése a gatewayben, identitásfejlécek a szolgáltatások felé
-> - jelszavak hashelése (ASP.NET Identity)
-> - bemenetek validálása kliens- és szerveroldalon, paraméterezett lekérdezések (EF Core)
-> - HTTPS/WSS, rate limiting
-> - **[AZURE]** az éles környezet biztonsága: titkok tárolása (Key Vault), az adattárolók csak belső
-> hálózatról érhetők el, nyilvános tanúsítvány, a gateway helye az Azure-ban (lásd 2.4.2)
-> - kapcsolat a specifikáció „Biztonság” követelményével
+A hitelesítés célja, hogy csak bejelentkezett felhasználó érhesse el a védett API-kat és a saját élő játszmáját, miközben a böngészőben a tokenek JavaScriptből nem olvashatók. A tokeneket a platform-service állítja ki, de minden klienskérés előtt az Envoy gateway ellenőrzi őket. A platform-service és a game-service az így hitelesített felhasználó azonosítóját a gateway által beállított fejlécekből kapja. A rendszer a specifikáció NF-1 biztonsági követelményét – jelszavak biztonságos tárolása, kliens- és szerveroldali bemenet-ellenőrzés, SQL injection elleni védelem, HTTPS/WSS – az alábbi módon valósítja meg.
+
+#### Bejelentkezés és tokenek
+
+Regisztrációkor vagy sikeres bejelentkezéskor a platform-service két tokent ad ki. Az access token egy ES256-tal aláírt JWT: a `sub` claim a felhasználó UUID v7 azonosítója, a `preferred_username` a felhasználóneve, az `iss` értéke `platform-service`, az `aud` értéke `chess-platform`, továbbá `iat` és `exp` időbélyeget tartalmaz. Érvényessége 15 perc. Az Envoy a saját, helyi JWKS-fájljában lévő nyilvános kulccsal ellenőrzi az aláírást, a kiállítót, a célközönséget és a lejáratot; az ellenőrzéshez nem kell a platform-service-től kulcsot kérnie.
+
+A második token egy 32 kriptográfiailag véletlen bájtból képzett, átlátszatlan refresh token. Hét napig érvényes, és a platform-service csak az SHA-256 hashét tárolja PostgreSQL-ben. Frissítéskor a szolgáltatás új refresh tokent ad ki és érvényteleníti az előzőt; az új token saját hét napos érvényességet kap, így az aktív munkamenet folyamatosan meghosszabbodik. A legfeljebb 10 másodperce lecserélt tokennel érkező párhuzamos vagy ismételt frissítést a szolgáltatás még elfogadja, hogy egy elveszett válasz ne léptesse ki a felhasználót. A régebben lecserélt token ismételt használata a teljes munkamenet visszavonását eredményezi.
+
+| Cookie | Tartalom | Biztonsági beállítások | Útvonal |
+|---|---|---|---|
+| `__Host-access-token` | 15 perces access token | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, `Domain` nélkül | minden kérés, a WebSocket-kézfogás is |
+| `__Secure-refresh-token` | 7 napos refresh token | `HttpOnly`, `Secure`, `SameSite=Strict` | csak `/api/auth` |
+
+A hozzáférés útvonalanként eltér:
+
+| Útvonal | Gateway-hitelesítés | Megjegyzés |
+|---|---|---|
+| `POST /api/auth/register`, `POST /api/auth/login` | nem kell access token | bejelentkezésnél IP-címenkénti rate limit érvényes |
+| `POST /api/auth/refresh`, `POST /api/auth/logout` | nem kell access token | a platform-service a refresh cookie alapján kezeli a munkamenetet |
+| többi `/api` végpont | érvényes access token kötelező | hiányzó vagy hibás tokennél a gateway 401-et ad |
+| `/ws/game` | érvényes access token kötelező a kézfogáskor | a token a cookie-ban érkezik |
+| `/ws/spectate` | access token nem kell | a jelenlegi `SpectateGateway` nem ellenőrzi a spectator-linket, csak a `gameId` alapján csatlakoztat a játékszobához; a link hitelesítése még megvalósítandó |
+
+A `HttpOnly` miatt a kliensoldali JavaScript nem tudja kiolvasni a tokeneket; a böngésző automatikusan küldi őket. A `Secure` csak HTTPS-en engedi a cookie-k küldését. A frontend a Web Locks API-val böngészőfülek között is sorosítja a frissítést. Ha egy védett REST-kérés vagy WebSocket-kapcsolat access tokenje lejárt, a kliens egyszer frissít, majd megismétli a kérést vagy újranyitja a kapcsolatot. Sikertelen frissítéskor a felhasználónak újra be kell jelentkeznie. A hibás felhasználónév és jelszó azonos 401-es hibaüzenetet ad, így a bejelentkezési válasz nem árulja el, hogy melyik adat volt hibás.
+
+Kijelentkezéskor a platform-service visszavonja a refresh tokenhez tartozó teljes munkamenetet, a válasz pedig mindkét cookie-t törli; a frontend az élő WebSocket-kapcsolatot is bezárja. A már kiadott access token nem vonható vissza azonnal: a gateway a lejáratáig, legfeljebb 15 percig elfogadhatja. A rövid élettartam korlátozza ezt az időablakot.
+
+```mermaid
+sequenceDiagram
+    participant B as Böngésző
+    participant E as Envoy gateway
+    participant P as platform-service
+    participant D as PostgreSQL
+
+    B->>E: POST /api/auth/login
+    E->>E: origin ellenőrzése, IP-címenkénti rate limit
+    E->>P: bejelentkezési kérés
+    P->>D: jelszó ellenőrzése, munkamenet és refresh hash mentése
+    P-->>B: access és refresh cookie
+    B->>E: védett kérés cookie-val
+    E->>E: JWT-aláírás, issuer, audience, lejárat ellenőrzése
+    E->>P: kérés x-user-id és x-user-name fejléccel
+    P-->>B: válasz
+    opt access token lejárt
+        B->>E: POST /api/auth/refresh refresh cookie-val
+        E->>P: kérés továbbítása
+        P->>D: refresh token rotációja
+        P-->>B: 204 és megújított cookie-k
+        B->>E: eredeti kérés ismétlése
+    end
+```
+
+*A bejelentkezés, a hitelesített kérés és a tokenfrissítés folyamata.*
+
+#### Jelszavak, jogosultságok és bemenetek
+
+A fiókokat az ASP.NET Core Identity kezeli. A jelszót a beépített PasswordHasher V3 formátumban tárolja: PBKDF2, HMAC-SHA512, 128 bites véletlen só és 100 000 iteráció. A jelszó soha nem kerül adatbázisba olvasható formában. A felhasználónév 3–20 angol betűből, számból, `_` vagy `-` karakterből állhat; az e-mail-cím kötelező és legfeljebb 254 karakteres. Mindkettő egyedisége kis- és nagybetűtől független. A jelszó 8–128 Unicode kódpont lehet, összetételi szabályok nélkül. Az e-mail-címet a rendszer nem ellenőrzi, mert nem küld e-mailt.
+
+A frontend az űrlapokban előzetesen ellenőrzi a regisztráció és a bejelentkezés adatait, de ez csak felhasználói segítség: a platform-service minden bemenetet a FluentValidation segítségével ismét ellenőriz. Hibás bemenetnél mezőszintű, egységes ProblemDetails-válasz érkezik. A backend nem bízik a kliens által megadott felhasználói azonosítóban: azt az Envoy által ellenőrzött JWT-ből veszi. Az Envoy a bejövő `x-user-id` és `x-user-name` fejléceket eltávolítja, és csak érvényes token claimeiből állítja be őket. A platform-service ezeket használja az aktuális felhasználó azonosítására; a felhasználóhoz kötött jogosultságokat – például, hogy egy játszma szereplője-e, illetve mely előzményeket kérdezheti le – az adott szolgáltatás ellenőrzi.
+
+Az ASP.NET Core Identity és az EF Core paraméterezett SQL-lekérdezésekkel éri el az adatbázist, ezért a felhasználói bemenet nem SQL-kódként kerül végrehajtásra. A felhasználónév és az e-mail egyediségét adatbázis-egyedi indexek is védik, párhuzamos regisztráció esetén is. A szolgáltatások szerződései és a szerveroldali validátorok határozzák meg az elfogadott bemeneti formátumot; a frontend validációja nem helyettesíti ezeket.
+
+#### Hálózati és kérésbiztonság
+
+A böngésző és a rendszer között TLS védi a HTTPS- és WSS-kapcsolatot; az Envoy zárja le a TLS-t. A gatewayen kívülről csak ez az egy belépési pont érhető el, a szolgáltatások és az adattárolók portjait az alap Compose nem teszi közzé. A konténerek egymás között a szükséges, elkülönített Docker-hálózatokon, titkosítatlan HTTP/AMQP/Redis protokollon kommunikálnak; ezek a hálózatok helyi futtatáskor nem hagyják el a gépet. A JWT-aláíró titkos kulcs csak a platform-service konténerbe van becsatolva, az Envoy kizárólag a nyilvános kulcsot kapja meg.
+
+A cookie-alapú hitelesítés miatt a gateway origin-ellenőrzést is végez. Eltérő originű böngészőből érkező, adatot módosító `/api` kérés 403 választ kap; a gateway a `Sec-Fetch-Site` fejlécet, ennek hiányában az `Origin` fejlécet vizsgálja. A WebSocket-kézfogásnál az `Origin` egyezését ellenőrzi. Ez a `SameSite=Strict` cookie-beállítással együtt csökkenti a CSRF-kockázatot.
+
+A gateway a `POST /api/auth/login` kéréseket kliens-IP-címenkénti token bucket algoritmussal korlátozza: egy cím vödre legfeljebb 30 tokent tartalmaz, és két másodpercenként egy token töltődik vissza. A limit túllépésekor 429-es választ ad, és a kérés nem jut el a platform-service-hez. Fiókonkénti zárolás nincs, mert e-mailes fiók-helyreállítás hiányában az végleges kizárást és mások általi fiókzárolást tenne lehetővé. Ennek korlátja, hogy a több IP-címről érkező próbálkozásokat ez nem fogja össze, illetve a NAT mögötti felhasználók közös IP-limitet használnak.
+
+A helyi fejlesztői TLS-tanúsítványt és JWT-kulcsokat az infra szkriptjei állítják elő, a titkok és fejlesztői kulcsok nem kerülnek verziókezelésbe. Az Azure-telepítés még tervezési feladat: a 2.4.2-ben kell rögzíteni a Key Vault vagy a futtatókörnyezet titokkezelésének használatát, a privát hálózati elérést, a nyilvános TLS-tanúsítványt, valamint azt, hogy az Envoy marad-e a gateway. Ha más Azure-szolgáltatás váltja ki az Envoyt, a JWT-ellenőrzést, az origin-védelmet és a rate limitinget is ott kell megvalósítani.
+
+A megoldás az NF-1 követelményt a jelszavak sózott, iteratív hashelésével, a kliens- és szerveroldali validációval, az EF Core paraméterezett adatbázis-hozzáférésével és a HTTPS/WSS használatával teljesíti. A hitelesítés és az autorizáció nem azonos: a gateway igazolja a token érvényességét, az adott szolgáltatás pedig a kért művelethez tartozó üzleti jogosultságot ellenőrzi. A megfigyelői útvonal hozzáférés-ellenőrzése jelenleg hiányos, ezért az X-7 funkció nem tekinthető biztonságosan késznek. A tervezési döntéseket az ADR-3 (gateway), az ADR-4 (hitelesítés), a PS-ADR-6 (validáció), a PS-ADR-11 (fiókok), a PS-ADR-12 (tokenek és munkamenetek) és a PS-ADR-7 (adatbázis-hozzáférés) részletezi; a technológiai források a [11]–[14] és [17] hivatkozások.
 
 ### 2.6 Fő folyamatok - Anna
 
