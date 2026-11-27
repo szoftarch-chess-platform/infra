@@ -1,28 +1,3 @@
-# Online sakkplatform – Rendszerterv (dokumentációváz)
-
-> Ez a fájl a dokumentáció váza. A `> Kifejtendő:` blokkok azt jelzik, mit kell az adott pontba írni,
-> a `> Forrás:` blokkok azt, honnan vehető át a tartalom (a repók ADR-jei és architektúra-leírásai angolul vannak,
-> ezeket kell magyarra átültetni). A **[ÚJ]** jelölésű pontok a második körben kerültek be,
-> az **[AZURE]** jelölésűek a tervezett Azure-telepítés miatt.
-> A végleges dokumentumból ezek a blokkok és jelölések törlendők.
->
-> **Felelősök:** minden fejezet alatt egy `> **Felelős:`** sor jelzi, ki írja. Az `infra` az `infra` repó
-> (Envoy, Docker Compose, adattárolók) gazdáját jelenti; ha nincs ilyen, ki kell jelölni valakit.
-> A `közös` fejezeteket egy ember szerkeszti, a többiek a saját részükkel adnak hozzá.
->
-> | Felelős | Önálló fejezetek | Rész a közös fejezetekből |
-> |---|---|---|
-> | frontend | 2.2.2, 2.9 | 2.5, 2.6, 2.10–2.13, 2.15, 4 |
-> | platform-service | 2.2.3, 2.8.1, 2.8.2 | 2.3, 2.5, 2.6, 2.10–2.13, 2.15, 4 |
-> | game-service | 2.2.4, 2.7, 2.8.3 | 2.3, 2.6, 2.10–2.13, 2.15, 4 |
-> | engine-service | 2.2.5 | 2.3, 2.6, 2.10–2.13, 2.15, 4 |
-> | infra | 2.2.1, 2.2.6–2.2.8, 2.4 (benne az Azure-környezet), 3 | 2.5, 2.12, 2.13, 4 |
-> | közös | 1, 2.1, 2.14, 5–7 | – |
-
----
-
-<!-- Címlap - anna -->
-
 <br><br><br>
 
 <p align="center">
@@ -59,34 +34,72 @@
 
 ## Tartalom
 
-1. [Követelményspecifikáció (kész)](#0-követelményspecifikáció-kész)
-2. [A rendszer célja és funkciói](#1-a-rendszer-célja-és-funkciói)
-   1. Feladatkiírás
-   2. A rendszer által biztosítandó tipikus funkciók
-3. [Megvalósítás](#2-megvalósítás)
-   1. Architektúra
-   2. Komponensek
-   3. Szolgáltatások közötti kommunikáció és interfészek
-   4. Telepítési diagram **[ÚJ]**
-      1. Helyi futtatás (Docker Compose)
-      2. Éles környezet (Azure) **[AZURE]**
-   5. Hitelesítés és biztonság
-   6. Fő folyamatok
-   7. A játszma állapotai **[ÚJ]**
-   8. Adat- és adatbázisterv
-   9. GUI-terv
-   10. Hibakezelés és hibatűrés **[ÚJ]**
-   11. Skálázhatóság **[ÚJ]**
-   12. Naplózás és monitorozás **[ÚJ]**
-   13. A nem funkcionális követelmények teljesítése
-   14. Tesztelés
-4. [Telepítési leírás](#3-telepítési-leírás)
-   1. Helyi futtatás
-   2. Telepítés Azure-ba **[AZURE]**
-5. [A program készítése során felhasznált eszközök](#4-a-program-készítése-során-felhasznált-eszközök)
-6. [Összefoglalás](#5-összefoglalás)
-7. [Továbbfejlesztési lehetőségek](#6-továbbfejlesztési-lehetőségek)
-8. [Hivatkozások](#7-hivatkozások)
+- [1. A rendszer célja és funkciói](#1-a-rendszer-célja-és-funkciói)
+  - [1.1 Feladatkiírás](#11-feladatkiírás)
+  - [1.2 A rendszer által biztosítandó funkciók](#12-a-rendszer-által-biztosítandó-funkciók)
+- [2. Megvalósítás](#2-megvalósítás)
+  - [2.1 Architektúra](#21-architektúra)
+  - [2.2 Komponensek](#22-komponensek)
+    - [2.2.1 API gateway (Envoy)](#221-api-gateway-envoy)
+    - [2.2.2 Webes kliens (frontend)](#222-webes-kliens-frontend)
+    - [2.2.3 platform-service (ASP.NET Core)](#223-platform-service-aspnet-core)
+    - [2.2.4 game-service (NestJS)](#224-game-service-nestjs)
+    - [2.2.5 engine-service (Python)](#225-engine-service-python)
+    - [2.2.6 PostgreSQL (relációs adatbázis)](#226-postgresql-relációs-adatbázis)
+    - [2.2.7 Redis (a futó játszmák tárolója)](#227-redis-a-futó-játszmák-tárolója)
+    - [2.2.8 RabbitMQ (üzenetközvetítő)](#228-rabbitmq-üzenetközvetítő)
+  - [2.3 Szolgáltatások közötti kommunikáció és interfészek](#23-szolgáltatások-közötti-kommunikáció-és-interfészek)
+    - [2.3.1 Szerződések](#231-szerződések)
+    - [2.3.2 A platform-service REST API-ja](#232-a-platform-service-rest-api-ja)
+    - [2.3.3 A game-service Socket.IO-eseményei](#233-a-game-service-socketio-eseményei)
+    - [2.3.4 Az engine-service HTTP API-ja](#234-az-engine-service-http-api-ja)
+    - [2.3.5 A befejezett játszma eseménye](#235-a-befejezett-játszma-eseménye)
+  - [2.4 Telepítési diagram](#24-telepítési-diagram)
+    - [2.4.1 Helyi futtatás (Docker Compose)](#241-helyi-futtatás-docker-compose)
+    - [2.4.2 Éles környezet (Azure)](#242-éles-környezet-azure)
+  - [2.5 Hitelesítés és biztonság](#25-hitelesítés-és-biztonság)
+    - [2.5.1 Bejelentkezés és tokenek](#251-bejelentkezés-és-tokenek)
+    - [2.5.2 Jelszavak, jogosultságok és bemenetek](#252-jelszavak-jogosultságok-és-bemenetek)
+    - [2.5.3 Hálózati és kérésbiztonság](#253-hálózati-és-kérésbiztonság)
+  - [2.6 Fő folyamatok](#26-fő-folyamatok)
+    - [2.6.1 Bejelentkezés és hitelesített kérés](#261-bejelentkezés-és-hitelesített-kérés)
+    - [2.6.2 Párosítás és élő játszma két játékos között](#262-párosítás-és-élő-játszma-két-játékos-között)
+    - [2.6.3 Játszma a gépi ellenfél ellen](#263-játszma-a-gépi-ellenfél-ellen)
+    - [2.6.4 A befejezett játszma átadása és mentése](#264-a-befejezett-játszma-átadása-és-mentése)
+    - [2.6.5 Játszmaelőzmények és visszajátszás](#265-játszmaelőzmények-és-visszajátszás)
+  - [2.7 A játszma állapotai](#27-a-játszma-állapotai)
+  - [2.8 Adat- és adatbázisterv](#28-adat--és-adatbázisterv)
+    - [2.8.1 Az adatbázis entitás-relációs diagramja](#281-az-adatbázis-entitás-relációs-diagramja)
+    - [2.8.2 Entitások](#282-entitások)
+    - [2.8.3 A futó játszmák adatmodellje (Redis)](#283-a-futó-játszmák-adatmodellje-redis)
+  - [2.9 GUI-terv](#29-gui-terv)
+  - [2.10 Hibakezelés és hibatűrés](#210-hibakezelés-és-hibatűrés)
+    - [2.10.1 Klienskapcsolat megszakadása és oldal-újratöltés](#2101-klienskapcsolat-megszakadása-és-oldal-újratöltés)
+    - [2.10.2 Párhuzamos munkamenetek (több böngészőfül)](#2102-párhuzamos-munkamenetek-több-böngészőfül)
+    - [2.10.3 Sakkmotor lassulása vagy hibája (AI játszma)](#2103-sakkmotor-lassulása-vagy-hibája-ai-játszma)
+    - [2.10.4 RabbitMQ vagy platform-service elérhetetlensége parti végén](#2104-rabbitmq-vagy-platform-service-elérhetetlensége-parti-végén)
+    - [2.10.5 game-service vagy Redis újraindulása](#2105-game-service-vagy-redis-újraindulása)
+    - [2.10.6 Lejárt access token kezelése mérkőzés alatt](#2106-lejárt-access-token-kezelése-mérkőzés-alatt)
+    - [2.10.7 Egységes hibakezelési formátum](#2107-egységes-hibakezelési-formátum)
+  - [2.11 Skálázhatóság](#211-skálázhatóság)
+    - [2.11.1 Szolgáltatások horizontális skálázhatósága](#2111-szolgáltatások-horizontális-skálázhatósága)
+    - [2.11.2 Szűk keresztmetszetek és kezelésük](#2112-szűk-keresztmetszetek-és-kezelésük)
+    - [2.11.3 Kapacitástervezés a követelményspecifikációhoz](#2113-kapacitástervezés-a-követelményspecifikációhoz)
+    - [2.11.4 Skálázás az éles felhőkörnyezetben](#2114-skálázás-az-éles-felhőkörnyezetben)
+  - [2.12 A nem funkcionális követelmények teljesítése](#212-a-nem-funkcionális-követelmények-teljesítése)
+  - [2.13 Tesztelés](#213-tesztelés)
+    - [2.13.1 Webes kliens (frontend)](#2131-webes-kliens-frontend)
+    - [2.13.2 Platform-service](#2132-platform-service)
+    - [2.13.3 Game-service](#2133-game-service)
+    - [2.13.4 Engine-service](#2134-engine-service)
+    - [2.13.5 Teljes rendszer és manuális tesztelés](#2135-teljes-rendszer-és-manuális-tesztelés)
+- [3. Telepítési leírás](#3-telepítési-leírás)
+  - [3.1 Helyi futtatás](#31-helyi-futtatás)
+  - [3.2 Telepítés Azure-ba](#32-telepítés-azure-ba)
+- [4. A program készítése során felhasznált eszközök](#4-a-program-készítése-során-felhasznált-eszközök)
+- [5. Összefoglalás](#5-összefoglalás)
+- [6. Továbbfejlesztési lehetőségek](#6-továbbfejlesztési-lehetőségek)
+- [7. Hivatkozások](#7-hivatkozások)
 
 ---
 
@@ -116,7 +129,7 @@ online lejátszását.
 ### 1.2 A rendszer által biztosítandó funkciók
 
 A rendszer célja, hogy a felhasználók böngészőből, valós időben játszhassanak sakkjátszmákat egy másik
-felhasználó vagy a gépi ellenfél ellen, és később visszanézhessék a lejátszott játszmáikat.A feladatkiírás extra funkciói közül a sáncolást és a gyalogátváltoztatást, továbbá a sakkórát valósítottuk meg.
+felhasználó vagy a gépi ellenfél ellen, és később visszanézhessék a lejátszott játszmáikat. A feladatkiírás extra funkciói közül a sáncolást és a gyalogátváltoztatást, továbbá a sakkórát valósítottuk meg.
 
 A felhasználó ezeket a funkciókat éri el a felületen:
 
@@ -133,14 +146,14 @@ A felhasználó ezeket a funkciókat éri el a felületen:
   - lépések az interaktív táblán, ahol egy bábu kiválasztásakor a tábla kiemeli azok szabályos lépéseit
   - a sakkóra mindkét játékosnak 10 percet ad a teljes játszmára, és mindkét játékosnál szinkronban jár
   - a játszmát bármikor fel lehet adni
-  - megszakadt kapcsolat vagy az oldal újratöltése után a játszma ott folytatódik ahol abbamaradt
+  - megszakadt kapcsolat vagy az oldal újratöltése után a játszma ott folytatódik, ahol abbamaradt
 - **a játszma vége**:
   - győzelem: matt, feladás, az ellenfél idejének lejárta
   - döntetlen: patt, háromszori ismétlés, ötvenlépéses szabály, anyaghiány, vagy az idő lejárta
   - megszakadás: ha a gépi ellenfél nem válaszol
 - **korábbi játszmák megtekintése**:
-  - a játszmák listájában látható az ellenfél, szín, eredmény, dátum és a megtett lépések listája
-  - a megtett lépések vizuálisan visszajátszhatóak a táblán
+  - a játszmák listájában látható az ellenfél, a szín, az eredmény és a dátum
+  - egy játszma megnyitásakor látható a lépéslistája, és a lépések vizuálisan visszajátszhatóak a táblán
 
 A funkciókat és a szereplőket az alábbi use-case diagram foglalja össze. A Vendég csak regisztrálni és bejelentkezni tud, a többi funkciót a bejelentkezett Felhasználó éri el.
 
@@ -181,7 +194,7 @@ flowchart LR
 
 ## 2. Megvalósítás
 
-### 2.1 Architektúra - Sz.B.
+### 2.1 Architektúra
 
 A rendszer környezetét a C4 modell [1] rendszerkörnyezet-szintjén az alábbi ábra mutatja. A Vendég regisztrálhat és bejelentkezhet, a bejelentkezett Felhasználó pedig élő játszmát játszhat egy másik felhasználó vagy az AI ellenfél ellen, és megnézheti a korábbi játszmáit.
 
@@ -197,9 +210,11 @@ flowchart LR
 
 *A rendszer környezete a C4 modell rendszerkörnyezet-szintjén*
 
-A rendszert mikroszolgáltatás-architektúrában valósítottuk meg. A szerver egyetlen belépési pontja egy API gateway, a webes klienstől érkező kérések mindegyike ezen keresztül megy. A felbontás fő célja, hogy a valós idejű játékot és a nagy gépigényű sakkmotort leválasszuk a kevésbé kritikus funkcióktól, például a felhasználókezeléstől és a játszmaelőzményektől. Így a gépi ellenfél a többi szolgáltatástól függetlenül skálázható, és a futó játszmák akkor is folytatódnak, ha a felhasználókat kezelő szolgáltatás éppen nem érhető el. A komponensek technológiáját a feladatukhoz választottuk. A rendszer futás közben egyetlen külső szolgáltatástól sem függ, és minden futó komponense ingyenes, nyílt forráskódú szoftver.
+A rendszert mikroszolgáltatás-architektúrában valósítottuk meg. A felbontás fő célja, hogy a valós idejű játékot és a nagy gépigényű sakkmotort leválasszuk a kevésbé kritikus funkcióktól, például a felhasználókezeléstől és a játszmaelőzményektől. Így a gépi ellenfél a többi szolgáltatástól függetlenül skálázható, és a futó játszmák akkor is folytatódnak, ha a felhasználókat kezelő szolgáltatás éppen nem érhető el. A komponensek technológiáját a feladatukhoz választottuk. A rendszer futás közben egyetlen külső szolgáltatástól sem függ, és minden futó komponense ingyenes, nyílt forráskódú szoftver.
 
-A webes kliens egy TypeScriptben írt React [2] alkalmazás, amely egyoldalas alkalmazásként fut a böngészőben. A React komponensekből építi fel a felületet, így a sakktábla, a sakkóra és a játszmalista önálló, újrahasznosítható részek, és a sakktáblához kész React-komponens is elérhető. Egyoldalas alkalmazásként az oldalak közötti váltás nem tölti újra az oldalt, és a felület a szervertől érkező eseményekre azonnal frissül.
+A webes kliens egy TypeScriptben írt React [2] alkalmazás, amely SPA alkalmazásként fut a böngészőben. A React komponensekből építi fel a felületet, így a sakktábla, a sakkóra és a játszmalista önálló, újrahasznosítható részek, és a sakktáblához kész React-komponens is elérhető. SPA alkalmazás lévén az oldalak közötti váltás nem tölti újra az oldalt. A felület a szervertől érkező eseményekre azonnal frissül.
+
+A szerver egyetlen belépési pontja egy API gateway, a webes klienstől érkező kérések mindegyike ezen keresztül megy. 
 
 A folyamatban lévő játszmákat a game-service kezeli, amely NestJS [3] keretrendszerben, Node.js-en fut. A Node.js eseményvezérelt, nem blokkoló I/O-modellje sok egyidejű, hosszan élő kapcsolatot kevés erőforrással szolgál ki, egy élő játszma pedig szinte csak ilyen munkából áll, vagyis a kliensek, a Redis és a sakkmotor válaszára való várakozásból. A NestJS beépítve támogatja a Socket.IO-alapú WebSocket-kapcsolatokat, és modulokba szervezi a kódot. Mivel a frontend és a game-service is TypeScriptben készül, mindkettő ugyanazt a sakkszabály-könyvtárat, a chess.js-t [4] használja. Így a kliensen kiemelt szabályos lépések pontosan azok, amelyeket a szerver elfogad, a lépés szabályosságáról viszont mindig a game-service dönt. A folyamatban lévő játszmák állapotát Redisben tárolja el, a befejezett játszmákat pedig RabbitMQ üzenetsorba rakja be.
 
@@ -246,8 +261,6 @@ flowchart TB
 - A **Redis** a folyamatban lévő játszmák állapotát, a párosítási sort és a még el nem küldött eseményeket tárolja.
 - A **RabbitMQ** a befejezett játszmákat juttatja el a game-service-től a platform-service-hez.
 
-A konténerek csak az ábrán látható utakon érik el egymást, mert mindegyik csak azokhoz a Docker-hálózatokhoz csatlakozik, amelyekre szüksége van.
-
 Az architektúra ára, hogy a szolgáltatások közötti kommunikációt is meg kellett tervezni. A game-service szinkron HTTP-kéréssel kéri el a gépi lépést, mert a játszma a válasz nélkül nem folytatódhat. A befejezett játszmát viszont aszinkron üzenettel adja át, hogy az akkor is megmaradjon, ha a platform-service éppen nem fut. A szolgáltatások három nyelven készülnek, ezért a köztük lévő interfészeket gépileg olvasható szerződések írják le, a REST interfészeket OpenAPI, a WebSocket-eseményeket és az üzeneteket AsyncAPI formátumban.
 
 A kódtárak a polyrepo elvet követik, vagyis minden telepítési egységnek saját Git-repója van a szoftarch-chess-platform GitHub-szervezetben.
@@ -264,13 +277,11 @@ Minden szolgáltatás a saját repójának CI-folyamatában építi a konténerk
 
 Egy monolit egyszerűbb lett volna, mert nem kellene hozzá gateway, üzenetközvetítő és szolgáltatások közötti szerződés. A sakkmotor és a valós idejű kapcsolatok azonban ugyanazokon az erőforrásokon osztoznának a felhasználókezeléssel, és a rendszert csak egészében lehetne skálázni. A szerződéseket a szolgáltatók saját repójában is tarthattuk volna, de akkor minden fogyasztónak egy másik szolgáltatás repójában kellene keresnie őket, ezért kerültek a közös infra repóba.
 
-### 2.2 Komponensek.
+### 2.2 Komponensek
 
 A rendszer komponensei jól elkülönülő felelősségeket látnak el: a frontend biztosítja a böngészős felületet, az Envoy az egyetlen külső belépési pont, a platform-service a felhasználói fiókokat és a játszmaelőzményeket kezeli, a game-service pedig a valós idejű játékmenetért felel. Az engine-service számítja a gépi ellenfél lépéseit; a PostgreSQL, a Redis és a RabbitMQ rendre a tartós adatokat, az aktív játszmák állapotát és az aszinkron eseményátadást támogatja. Az alfejezetek bemutatják az egyes komponensek célját, felelősségeit, technológiai választásait és indoklását, valamint – ahol ez segíti a megértést – belső felépítésüket és kapcsolataikat.
 
-> **Felelős:** lásd az alfejezeteket
-
-#### 2.2.1 API gateway (Envoy) - Sz.B
+#### 2.2.1 API gateway (Envoy)
 
 Célja, hogy a böngésző egyetlen címen érje el a rendszer minden részét, vagyis a frontend statikus fájljait, a platform-service REST API-ját és a game-service WebSocket-kapcsolatait. Mivel minden egy originről érkezik, CORS-ra nincs szükség. A gateway az access tokeneket is ellenőrzi, így ezt a logikát nem kell C#-ban és TypeScriptben is megírni, és egy érvénytelen kérés el sem jut a szolgáltatásokig. Ez a gateway offloading minta [10].
 
@@ -292,7 +303,7 @@ Az access tokent az Envoy `jwt_authn` szűrője [11] ellenőrzi. A tokent a `__H
 
 Két rövid Lua-szkript ellenőrzi a kérések originjét. Egy másik originről érkező WebSocket-kézfogást és adatot módosító API-kérést a gateway 403-as válasszal elutasít. Ehhez a böngésző által beállított `Sec-Fetch-Site` és `Origin` fejlécet vizsgálja, amelyet egy weboldal nem tud megváltoztatni. Ez véd a CSRF-támadások ellen, amelyekben egy idegen oldal a felhasználó cookie-jaival küldene kérést.
 
-A bejelentkezési kísérleteket a gateway token bucket algoritmussal [12] korlátozza, amelyben minden kliens IP-címnek saját vödre van. Egy vödörben legfeljebb 30 token fér el, és 2 másodpercenként egy új token kerül bele, így egy címről egyszerre 30 kísérlet lehetséges, utána 2 másodpercenként egy. A korlátot túllépő kérés 429-es választ kap, és nem jut el a platform-service-hez. Az értékek a Supabase jelszavas bejelentkezésének alapértelmezéseit követik [13], így egy elgépelt jelszó vagy több, egy NAT mögötti felhasználó sem ütközik a korlátba. A korlátozás az origin ellenőrzése után következik, így egy idegen oldal a látogatói böngészőjéből küldött kérésekkel sem tudja elhasználni a látogatók kísérleteit. Felhasználónkénti korlát szándékosan nincs, mert a rendszerben nincs fiók-helyreállítás, így egy zárolás véglegesen kizárná a felhasználót, és bárki kizárhatna bárkit.
+A bejelentkezési kísérleteket a gateway token bucket algoritmussal [12] korlátozza, amelyben minden kliens IP-címnek saját vödre van. Egy vödörben legfeljebb 30 token fér el, és 2 másodpercenként egy új token kerül bele, így egy címről egyszerre 30 kísérlet lehetséges, utána 2 másodpercenként egy. A korlátot túllépő kérés 429-es választ kap, és nem jut el a platform-service-hez. Az értékek a Supabase jelszavas bejelentkezésének alapértelmezéseit követik [13], így egy elgépelt jelszó vagy több, egy NAT mögötti felhasználó sem ütközik a korlátba. A korlátozás az origin ellenőrzése után következik, így egy idegen oldal a látogatói böngészőjéből küldött kérésekkel sem tudja elhasználni a látogatók kísérleteit. Felhasználónkénti korlát szándékosan nincs, mert a rendszerben nincs fiók-helyreállítás, így egy zárolás véglegesen kizárná a felhasználót, és bárki kizárhatna bárkit. A korlát címenként számol, így a több címről érkező próbálkozásokat nem fogja össze.
 
 A gateway a Docker szolgáltatásnevét a szolgáltatás minden példányának címére feloldja, így a felskálázott példányok között is elosztja a kéréseket. A WebSocket-útvonalakon a kérés időkorlátja ki van kapcsolva, a tétlenségi időkorlát pedig az alapértelmezett 5 perc helyett egy óra, így egy hosszú játszma kapcsolata sem szakad meg. Végül minden kérésről egy naplósort ír a konténer standard kimenetére.
 
@@ -325,13 +336,13 @@ flowchart LR
 
 Megjelenése a kódban az infra repó `envoy/envoy.yaml` fájlja. A konfigurációt, a TLS-tanúsítványt és a tokenek nyilvános kulcsát a Compose csak olvashatóan csatolja a konténerbe, a tokeneket aláíró titkos kulcs pedig nem kerül a gatewayhez. Az Envoy adminisztrációs felülete csak a konténeren belül figyel, és csak a health check használja.
 
-#### 2.2.2 Webes kliens (frontend) - Anna
+#### 2.2.2 Webes kliens (frontend)
 
 Célja, hogy a felhasználó böngészőből érje el a rendszer minden funkcióját. A felelősségei a következők.
 
 - Megjeleníti az oldalakat, és a bejelentkezéstől függően engedi vagy irányítja át a felhasználót.
 - A platform-service REST API-ján kezeli a fiókot, és lekéri a játszmaelőzményeket.
-- A game-service-el Socket.IO-kapcsolatot tart amíg a felhasználó be van jelentkezve, és ennek eseményeiből vezeti az élő játszma állapotát.
+- A game-service-szel Socket.IO-kapcsolatot tart, amíg a felhasználó be van jelentkezve, és ennek eseményeiből vezeti az élő játszma állapotát.
 - Megjeleníti a sakktáblát, kiemeli a kiválasztott bábu szabályos lépéseit, és elküldés előtt ellenőrzi a lépést. A lépésről végül mindig a game-service dönt.
 - Visszajátssza a befejezett játszmákat.
 
@@ -365,17 +376,17 @@ flowchart TD
 
 | Mappa | Tartalom |
 |---|---|
-| `pages` | az oldalak, az útvonalakat a 2.9 fejezet sorolja fel |
+| `pages` | az oldalak |
 | `auth`, `lobby`, `game`, `layout` | az oldalak részei, például az űrlapok, a sakktábla, a sakkóra és az élő játszma tárolója |
 | `api` | a szolgáltatások interfészei, a klienseik és a szerződések típusai |
 | `routing` | a bejelentkezéshez kötött oldalak őrei |
 | `app`, `theme` | a közös beállítások, a gyorsítótár és a téma |
 
-A kliens minden kérést relatív címre küld, így ugyanaz a build minden környezetben működik. A konténerképben egy nem root felhasználóként futó nginx szolgálja ki a statikus fájlokat, és minden ismeretlen útvonalra az `index.html`-t adja vissza, így egy oldal közvetlen linkről is betölt. Az interfészeket a 2.3, a tokenek kezelését a 2.5, az oldalakat a 2.9 fejezet írja le.
+A kliens minden kérést relatív címre küld, így ugyanaz a build minden környezetben működik. A konténerképben egy nem root felhasználóként futó nginx szolgálja ki a statikus fájlokat, és minden ismeretlen útvonalra az `index.html`-t adja vissza, így egy oldal közvetlen linkről is betölt.
 
 Megjelenése a kódban a frontend repó `src` mappája.
 
-#### 2.2.3 platform-service (ASP.NET Core) - Sz.B.
+#### 2.2.3 platform-service (ASP.NET Core)
 
 Célja, hogy kiszolgálja a rendszer hosszú távú, nem valós idejű funkcióit. A felelősségei a következők.
 
@@ -399,7 +410,7 @@ A választott technológia a .NET 10 és az ASP.NET Core. A szolgáltatás fő k
 | RabbitMQ.Client | a befejezett játszmák fogadása |
 | a beépített OpenAPI és a Scalar | az API kipróbálható leírása fejlesztői módban |
 
-Az ASP.NET Core Identity [14] normalizálja a felhasználóneveket és az e-mail-címeket, így a kis- és nagybetűtől független egyediség vele együtt jár, a jelszavakat pedig PBKDF2-vel hasheli HMAC-SHA512 függvénnyel, 128 bites sóval és 100 000 iterációval. Az Identity végpontjait és cookie-jait nem használjuk, mert a tokeneket a szolgáltatás maga adja ki. Az EF Core minden lekérdezést paraméterezve küld, ez véd az SQL injection ellen. A JWT-könyvtár ES256 aláírást ír, és kiszámítja a kulcs ujjlenyomatát, így a szolgáltatásnak nincs saját kriptográfiai kódja. A RabbitMQ-t a hivatalos kliensen keresztül, üzenetkezelő könyvtár nélkül használjuk, mert az üzenetek borítékát a szerződés rögzíti, egy olyan könyvtár pedig, mint a MassTransit, a saját borítékát és elnevezéseit hozná.
+Az ASP.NET Core Identity [14] normalizálja a felhasználóneveket és az e-mail-címeket, így a kis- és nagybetűtől független egyediség vele együtt jár, a jelszavakat pedig sózott PBKDF2-vel hasheli. Az Identity végpontjait és cookie-jait nem használjuk, mert a tokeneket a szolgáltatás maga adja ki. A JWT-könyvtár ES256 aláírást ír, és kiszámítja a kulcs ujjlenyomatát, így a szolgáltatásnak nincs saját kriptográfiai kódja. A RabbitMQ-t a hivatalos kliensen keresztül, üzenetkezelő könyvtár nélkül használjuk, mert az üzenetek borítékát a szerződés rögzíti, egy olyan könyvtár pedig, mint a MassTransit, a saját borítékát és elnevezéseit hozná.
 
 A konténerkép a Microsoft shell és csomagkezelő nélküli, úgynevezett chiseled képére épül, és a szolgáltatás nem root felhasználóként fut. Mivel a képben curl sincs, a health checket egy kis .NET konzolalkalmazás végzi, amely a kép része, ahogy a .NET csapata is javasolja [15].
 
@@ -491,7 +502,7 @@ A naplózás a beépített `ILogger` segítségével történik. Fejlesztői mó
 
 A `GameFinishedConsumer` egyszerre egy üzenetet dolgoz fel a befejezett játszmák sorából. Egy játszmát csak az adatbázis-tranzakció véglegesítése után nyugtáz, egy már feldolgozott eseményt pedig változtatás nélkül nyugtáz, így az ismételt kézbesítés nem hoz létre második játszmát. Egy érvénytelen üzenet azonnal a hibás üzenetek sorába kerül. Átmeneti adatbázishiba esetén az üzenet visszakerül a sorba, és nem számít bele a kézbesítési korlátba. Ha a kapcsolat megszakad, vagy a RabbitMQ induláskor nem érhető el, a szolgáltatás rendszeresen újra kapcsolódik, és közben az API tovább működik.
 
-#### 2.2.4 game-service (NestJS) - B.B.
+#### 2.2.4 game-service (NestJS)
 
 - **Célja:**  
   A `game-service` a platform valós idejű játékszervező mikroszolgáltatása. Feladata a folyamatban lévő mérkőzések teljes életciklusának kezelése: párosítás, lépésfogadás, szabályellenőrzés, sakkórák mérése, partik lezárása és az események aszinkron továbbítása.
@@ -500,7 +511,7 @@ A `GameFinishedConsumer` egyszerre egy üzenetet dolgoz fel a befejezett játszm
   - **Párosítás:** Valós idejű, FIFO elvű várósor kezelése két játékos véletlenszerű összekapcsolására.
   - **Valós idejű kommunikáció:** Alacsony késleltetésű kétirányú WebSocket kapcsolatok biztosítása Socket.IO segítségével (`/ws/game`).
   - **Munkamenet-kezelés:** Felhasználói szobák (`user:<userId>`) révén több fül/eszköz egyidejű szinkronizálása; felhasználónként szigorúan legfeljebb egy aktív mérkőzés vagy várakozás engedélyezett.
-  - **Szabályellenőrzés:** Hivatalos FIDE sakkszabályok érvényesítése a `chess.js` könyvtárral (szabályos lépések, sáncolás, en passant, gyalogátváltoztatás, sakk, matt, döntetlenek).
+  - **Szabályellenőrzés:** A sakk szabályainak érvényesítése a `chess.js` könyvtárral (szabályos lépések, sáncolás, en passant, gyalogátváltoztatás, sakk, matt, döntetlenek).
   - **Sakkóra:** 10 perces gondolkodási idő játékosonként; valós idejű óraszámítás és határidő-ellenőrzés.
   - **AI mérkőzések:** Játszmák kiszolgálása a gép ellen az `engine-service` (Stockfish) szinkron REST hívásával.
   - **Eseményátadás:** Befejezett játszmák továbbítása RabbitMQ-n keresztül (Transactional Outbox mintával) a tartós tárolásért felelős `platform-service` felé.
@@ -509,7 +520,7 @@ A `GameFinishedConsumer` egyszerre egy üzenetet dolgoz fel a befejezett játszm
   - **NestJS (TypeScript):** Moduláris, típusos keretrendszer beépített függőséginjektálással, kifejezetten alkalmas nagy egyidejűségű I/O műveletekre.
   - **Socket.IO:** Kizárólagos WebSocket transzport a minimális hálózati késleltetésért (az Envoy mögött a HTTP polling fallback le van tiltva).
   - **chess.js (1.4.0):** Megbízható, determinisztikus sakkmag; a frontenddel azonos logikát garantál.
-  - **@redis/client:** Nagy sebességű natív kliens atomi Lua szkriptvégrehajtáshoz.
+  - **@redis/client:** A Redis hivatalos Node.js-kliense, amely az atomi Lua szkripteket is futtatja.
 
 - **Belső felépítése:**
   - `src/game/`: A WebSocket gateway (`GameGateway`) és az üzleti folyamatok vezérlése (`joinQueue`, `leaveQueue`, `startBotGame`, `makeMove`, `resign`, `getState`).
@@ -520,15 +531,11 @@ A `GameFinishedConsumer` egyszerre egy üzenetet dolgoz fel a befejezett játszm
   - `src/outbox/`: `OutboxPublisher`, 1,5 másodpercenként továbbítja a befejezett meccseket a RabbitMQ felé.
   - `src/config/`: Környezeti változók típusos konfigurációja és validációja.
 
-#### 2.2.5 engine-service (Python).
-
-> **Felelős:** engine-service
+#### 2.2.5 engine-service (Python)
 
 Az engine-service-t a game-service szinkron HTTP-szolgáltatásként használja: egy megadott FEN-állásból kiszámítja a gépi ellenfél következő lépését. Nem tárol játszmaállapotot, nem módosítja a játszmát és nem kommunikál közvetlenül a böngészővel; a visszakapott lépést a game-service ellenőrzi és alkalmazza.
 
-Az API egyetlen művelete a `POST /moves`. A kérés `fen` mezőt és opcionális, alapértelmezésben `standard` értékű `variant` mezőt tartalmaz; a válasz a lépést UCI-jelöléssel adja vissza, például `e2e4` formában. A hibás kérés vagy érvénytelen FEN 400-as, a nem támogatott változat vagy lépés nélküli állás 422-es, a sakkmotor hibája 500-as választ eredményez. Az API-szerződés legfeljebb 10 másodperces választ ír elő. A game-service 15 másodperces kliensoldali időkorláttal dolgozik, és az időtúllépést vagy szerverhibát egyszer újrapróbálja; a 400-as és 422-es válaszokat nem ismétli. Nincs 504-es válasz a szolgáltatás szerződésében.
-
-A FastAPI kezeli a HTTP API-t, a Pydantic modellek validálják a kérést és a választ, az Uvicorn futtatja az alkalmazást. A python-chess ellenőrzi a FEN-t és kommunikál a Stockfish-el annak szabványos UCI protokollján keresztül. A Stockfish a konténerben, külön folyamatként fut. A gépi ellenfél egyetlen rögzített erősséggel játszik: a keresési mélység alapértelmezése 10, a számítás legfeljebb 8,5 másodperc. Nehézségi fokozatok nincsenek.
+A FastAPI kezeli a HTTP API-t, a Pydantic modellek validálják a kérést és a választ, az Uvicorn futtatja az alkalmazást. A python-chess ellenőrzi a FEN-t és kommunikál a Stockfish-sel annak szabványos UCI protokollján keresztül. A Stockfish a konténerben, külön folyamatként fut. A gépi ellenfél egyetlen rögzített erősséggel játszik: a keresési mélység alapértelmezése 10, a számítás legfeljebb 8,5 másodperc. Nehézségi fokozatok nincsenek.
 
 ```mermaid
 flowchart LR
@@ -539,13 +546,13 @@ flowchart LR
     api -->|"JSON: move"| game
 ```
 
-*Az engine-service lépéskérése.*
+*Az engine-service lépéskérése*
 
-A szolgáltatás Python 3.14-alapú, hivatalos Debian slim konténerképből épül, és nem root felhasználóként fut. Az engine-service csak a game-service-szel közös, belső Docker-hálózaton érhető el; a gateway nem továbbít rá külső kérést. A `GET /health` végpontot a Compose health checkje használja. Az alkalmazás a játszmaállapot szempontjából állapotmentes, ezért több példányra osztható, de a jelenlegi Compose egy példányt futtat. Egy példányban egy Stockfish-folyamat dolgozik, amely a kéréseket egymás után szolgálja ki; a várakozás legfeljebb egy másodperc, ezért a párhuzamos terhelés további motorpéldányokat vagy külön terheléselosztást igényel.
+A szolgáltatás Python 3.14-alapú, hivatalos Debian slim konténerképből épül, és nem root felhasználóként fut. A `GET /health` végpontot a Compose health checkje használja. Az alkalmazás a játszmaállapot szempontjából állapotmentes, ezért több példányra osztható, de a jelenlegi Compose egy példányt futtat. Egy példányban egy Stockfish-folyamat dolgozik, amely a kéréseket egymás után szolgálja ki; a várakozás legfeljebb egy másodperc, ezért a párhuzamos terhelés további motorpéldányokat vagy külön terheléselosztást igényel.
 
 A megvalósítás az engine-service repó `engine_service` mappájában található. Az API szerződése az infra repó `contracts/engine-service.openapi.yaml` fájlja.
 
-#### 2.2.6 PostgreSQL (relációs adatbázis) - Sz.B.
+#### 2.2.6 PostgreSQL (relációs adatbázis)
 
 Célja a rendszer hosszú távon megőrzendő adatainak tárolása. Ezek a felhasználói fiókok a jelszavak hashével, a munkamenetek a refresh tokenek hashével és a befejezett játszmák a lépéstörténetükkel.
 
@@ -564,37 +571,37 @@ A konfigurációja a következő.
 - A platform-service a `ConnectionStrings__Platform` környezeti változóból kapja a kapcsolati karakterláncot, amelyet a Compose állít be.
 - Fejlesztéshez a szerver a 127.0.0.1:5432 címen is elérhető, így a gépen futó platform-service és az adatbázis-kezelő eszközök is ugyanahhoz az adatbázishoz kapcsolódhatnak. Ezt a címet csak ugyanaz a gép éri el.
 
-Az éles környezetben a platform-service-nek csak egy kapcsolati karakterláncra van szüksége, ezért egy menedzselt PostgreSQL-szolgáltatással, például az Azure Database for PostgreSQL Flexible Serverrel és egy konténerben futó szerverrel is kódváltozás nélkül működik. Menedzselt szerveren az inicializáló szkript nem fut le, ezért az adatbázist és a felhasználót a telepítés részeként kell létrehozni.
+A platform-service-nek csak egy kapcsolati karakterláncra van szüksége, ezért egy menedzselt PostgreSQL-szolgáltatással, például az Azure Database for PostgreSQL Flexible Serverrel is kódváltozás nélkül működne. Ekkor az inicializáló szkript helyett a telepítésnek kellene létrehoznia az adatbázist és a felhasználót.
 
-#### 2.2.7 Redis (a futó játszmák tárolója) - B.B.
+#### 2.2.7 Redis (a futó játszmák tárolója)
 
 - **Célja:**  
   A platform ultra-alacsony késleltetésű, memóriában futó kulcs-érték adattára a futó mérkőzések, sakkóra-határidők, játékos-státuszok, párosítási várósor és a tranzakciós outbox események tárolására.
 
 - **Felelősségei:**
-  - **Gyors állapotkiszolgálás:** Valós idejű játékmenet támogatása mikroszekundumos válaszidővel.
-  - **Állapotmentesség biztosítása:** A `game-service` processzei állapotmentesek maradnak, bármely példány hozzáférhet bármely játszmához.
+  - **Gyors állapotkiszolgálás:** Valós idejű játékmenet támogatása ezredmásodperc alatti válaszidővel.
+  - **Állapotmentesség biztosítása:** A `game-service` processzei nem tárolnak játszmaállapotot, így bármely példány hozzáférhet bármely játszmához.
   - **Atomi műveletvégrehajtás:** Összetett állapotátmenetek (lépés, óralevonás, zárás, outboxba írás) végrehajtása zárolásmentes Lua szkriptekkel.
   - **Outbox puffer:** Befejezett partik átmeneti tárolása a megerősített RabbitMQ feladásig.
 
 - **Ki használja:**  
-  Kizárólag a `game-service` éri el a dedikált belső `redis` Docker hálózaton keresztül.
+  Kizárólag a `game-service` éri el a dedikált `redis` Docker-hálózaton keresztül.
 
 - **Miért ezt választottuk és elvetett alternatívák:**
-  - **Redis:** Memóriában tárol, támogatja a Lua tranzakciókat és a komplex adatstruktúrákat (Sorted Set órahatáridőkhöz), garantálva a <500 ms-os válaszidőt.
+  - **Redis:** Memóriában tárol, és támogatja az atomi Lua szkripteket és a komplex adatstruktúrákat (Sorted Set órahatáridőkhöz).
   - *Elvetett alternatíva – Node.js belső memória:* Ellehetetlenítené a horizontális skálázást, és konténer-újrainduláskor az összes futó parti elveszne.
   - *Elvetett alternatíva – PostgreSQL:* A folyamatos másodpercenkénti óra- és lépésfrissítések lemezre írása és sorzárolása túlterhelné a relációs adatbázist.
 
 - **Konfiguráció és megbízhatóság:**
   - **Kép:** `redis:8.8-alpine`.
   - **Tartósság:** AOF (`appendonly yes`) perzisztencia dedikált köteten (`redis-data:/data`), így újrainduláskor a partik és az outbox események helyreállnak.
-  - **Biztonság (ACL):** A jelszó nélküli `default` felhasználó tiltva (`--user default off`); a `game-service` felhasználó nem ér el adminisztratív parancsokat (`+@all -@admin`).
+  - **Biztonság (ACL):** A jelszó nélküli `default` felhasználó tiltva (`--user default off`); a `game-service` felhasználó nem ér el adminisztratív és veszélyes parancsokat (`+@all -@admin -@dangerous`).
   - **Éles környezet:** Konténerként fut a közös Azure VM-en, elkerülve a drága menedzselt felhős szolgáltatásokat.
 
 - **Megjelenés a kódban:**  
   A `game-service/src/redis/redis.service.ts` (`RedisService`) kezeli a kapcsolatot a `@redis/client` csomagon keresztül. Integrációs tesztjei valós konténer ellen futnak (Testcontainers).
 
-#### 2.2.8 RabbitMQ (üzenetközvetítő) - B.B.
+#### 2.2.8 RabbitMQ (üzenetközvetítő)
 
 - **Célja:**  
   A mikroszolgáltatások közötti megbízható, aszinkron üzenetbróker. Célja a befejezett játszmák laza csatolású, garantált átadása a `game-service` és a perzisztenciát végző `platform-service` között.
@@ -611,7 +618,7 @@ Az éles környezetben a platform-service-nek csak egy kapcsolati karakterláncr
   - **RabbitMQ:** Kiforrott üzenetsor beépített menedzsment felülettel és replikált naplózású Quorum Queue mechanizmussal.
   - *Elvetett alternatíva – Szinkron REST hívás:* Szoros csatolást hozna létre; a `platform-service` hibája vagy lassulása blokkolná a játszma lezárását.
   - *Elvetett alternatíva – Apache Kafka:* Feleslegesen komplex és erőforrásigényes; visszajátszható eseménystreamek helyett csak megbízható feladatra van szükség.
-  - *Elvetett alternatíva – Redis Streams:* A holtverseny-kezelést (DLQ) és konfirmációkat manuálisan kellene fejleszteni, és sértené az adatbázis-per-szolgáltatás elvet.
+  - *Elvetett alternatíva – Redis Streams:* A hibás üzenetek sorát (DLQ) és a kézbesítési korlátot kézzel kellene megvalósítani, és sértené az adatbázis-per-szolgáltatás elvet.
 
 - **Sorok és kézbesítési mechanizmus:**
   - **Exchange & Sor:** `game.events` (tartós topic exchange, `game.finished` kulcs) ➔ `platform.game-finished` (tartós Quorum Queue).
@@ -629,9 +636,9 @@ Az éles környezetben a platform-service-nek csak egy kapcsolati karakterláncr
 - **Megjelenés a kódban:**  
   Feladói oldalon az `OutboxPublisher` (`amqplib`), fogadói oldalon a `platform-service` háttér-fogyasztója (`GameFinishedConsumer`) valósítja meg. Konfiguráció: `infra/rabbitmq/rabbitmq.conf` és `definitions.json`.
 
-### 2.3 Szolgáltatások közötti kommunikáció és interfészek - Anna
+### 2.3 Szolgáltatások közötti kommunikáció és interfészek
 
-Ez a fejezet azt írja le, hogy a rendszer komponensei milyen interfészeken és milyen protokollokon kommunikálnak egymással. A 2.1 fejezet konténerdiagramja mutatja, hogy ki kivel áll kapcsolatban. A 2.4 fejezet telepítési diagramjai a kapcsolatok protokollját ebből a táblázatból veszik.
+Ez a fejezet azt írja le, hogy a rendszer komponensei milyen interfészeken és milyen protokollokon kommunikálnak egymással.
 
 | Kezdeményező | Fogadó | Protokoll | Mód | Tartalom |
 |---|---|---|---|---|
@@ -643,11 +650,11 @@ Ez a fejezet azt írja le, hogy a rendszer komponensei milyen interfészeken és
 | game-service | Redis | RESP | szinkron | a futó játszmák állapota, a párosítási sor és a még el nem küldött események |
 | platform-service | PostgreSQL | a PostgreSQL saját protokollja | szinkron | felhasználók, munkamenetek, játszmaelőzmények |
 
-A böngészőből érkező minden kapcsolat az API Gatewayen keresztül megy, ezt a 2.2.1 fejezet írja le. A szolgáltatások egymást a Docker Compose szolgáltatásnevén érik el, így külön szolgáltatásfelderítésre nincs szükség. A szinkron és az aszinkron kapcsolat választásának okát a 2.1 fejezet írja le. A platform-service-nek nincs belső végpontja, a játszmákat csak a RabbitMQ-n keresztül kapja meg, így nem kell olyan hívót hitelesítenie, amely nem a gatewayen keresztül érkezik.
+A böngészőből érkező minden kapcsolat az API gatewayen keresztül megy. A szolgáltatások egymást a Docker Compose szolgáltatásnevén érik el, így külön szolgáltatásfelderítésre nincs szükség. A platform-service-nek nincs belső végpontja, a játszmákat csak a RabbitMQ-n keresztül kapja meg, így nem kell olyan hívót hitelesítenie, amely nem a gatewayen keresztül érkezik.
 
 #### 2.3.1 Szerződések
 
-A szolgáltatások három nyelven készülnek, és párhuzamosan fejlesztettük őket, ezért az interfészeiket szerződésalapon, design-first módon készítettük. 
+A szolgáltatások három nyelven készülnek, és párhuzamosan fejlesztettük őket, ezért az interfészeiket szerződésalapon, design-first módon készítettük.
 
 | Szerződés | Interfész | Szolgáltató | Fogyasztó |
 |---|---|---|---|
@@ -657,13 +664,13 @@ A szolgáltatások három nyelven készülnek, és párhuzamosan fejlesztettük 
 | `game-events.asyncapi.yaml` | események a RabbitMQ-n | game-service | platform-service |
 | `shared-schemas.yaml` | a több szerződésben használt sémák | | |
 
-A HTTP API-kat OpenAPI 3.1 [31], a Socket.IO-eseményeket és a RabbitMQ-üzeneteket AsyncAPI 3.1 [32] formátumban írtuk le. A sémák csak a JSON Schema azon kulcsszavait használják, amelyeket mindkét formátum ismer, így mindkettő hivatkozhat a közös sémafájlra. Az AsyncAPI-nak nincs Socket.IO-kötése, ezért a game-service szerződésében egy kliensesemény fogadó műveletként, egy szerveresemény küldő műveletként szerepel, egy esemény nyugtája pedig a művelet válasza. Minden szerződést a Redocly CLI [33] ellenőriz rögzített verzióval, `npx`-en keresztül, így a parancs minden fejlesztő gépén ugyanúgy fut.
+A HTTP API-kat OpenAPI 3.1 [24], a Socket.IO-eseményeket és a RabbitMQ-üzeneteket AsyncAPI 3.1 [25] formátumban írtuk le. A sémák csak a JSON Schema azon kulcsszavait használják, amelyeket mindkét formátum ismer, így mindkettő hivatkozhat a közös sémafájlra. Az AsyncAPI-nak nincs Socket.IO-kötése, ezért a game-service szerződésében egy kliensesemény fogadó műveletként, egy szerveresemény küldő műveletként szerepel, egy esemény nyugtája pedig a művelet válasza. Minden szerződést a Redocly CLI [26] ellenőriz rögzített verzióval, `npx`-en keresztül, így a parancs minden fejlesztő gépén ugyanúgy fut.
 
-Minden szerződés szemantikus verziót kap.  Minden kéréshez, válaszhoz és üzenethez tartozik példa a szerződésben. A szerződések közös adatkonvenciókat követnek, így ugyanaz a játszma ugyanúgy néz ki a Socket.IO-eseményekben, a RabbitMQ-üzenetben és a játszmaelőzmények API-jában.
+Minden szerződés szemantikus verziót kap. Egy opcionális mező, esemény, végpont vagy felsorolásérték hozzáadása kompatibilis változás, mert az olvasó figyelmen kívül hagyja az ismeretlen mezőket, és hiba nélkül kezeli egy felsorolás ismeretlen értékét, ahogy a tolerant reader minta [27] javasolja. Minden kéréshez, válaszhoz és üzenethez tartozik példa a szerződésben. A szerződések közös adatkonvenciókat követnek, így ugyanaz a játszma ugyanúgy néz ki a Socket.IO-eseményekben, a RabbitMQ-üzenetben és a játszmaelőzmények API-jában. A mezők nevei camelCase formájúak, az időpontok RFC 3339 [28] szerinti UTC-időbélyegek, az időtartamok ezredmásodpercben értendők, az állást FEN-jelölés [29], a lépést pedig UCI-jelölés [30] írja le, például `e2e4`.
 
 #### 2.3.2 A platform-service REST API-ja
 
-Célja, hogy a webes kliens elérje a fiókkezelést és a befejezett játszmákat. Egyetlen fogyasztója a frontend, ami a gatewayen keresztül, JSON-ban hívja. 
+Célja, hogy a webes kliens elérje a fiókkezelést és a befejezett játszmákat. Egyetlen fogyasztója a frontend, ami a gatewayen keresztül, JSON-ban hívja.
 
 | Végpont | Leírás | Access token |
 |---|---|---|
@@ -675,9 +682,9 @@ Célja, hogy a webes kliens elérje a fiókkezelést és a befejezett játszmák
 | `GET /api/games` | a felhasználó befejezett játszmái lapozva, a legújabbal kezdve | kötelező |
 | `GET /api/games/{gameId}` | egy befejezett játszma a lépéseivel | kötelező |
 
-A bejelentkezés, a regisztráció és a frissítés a tokeneket HttpOnly cookie-ban adja vissza, ezért a kliens a felhasználót a `GET /api/users/me` végpontról kérdezi le. A tokeneket, a cookie-kat és a frissítés menetét a 2.5 fejezet írja le.
+A bejelentkezés, a regisztráció és a frissítés a tokeneket HttpOnly cookie-ban adja vissza. Ezekből a kliens nem tudja kiolvasni a felhasználót, ezért egy oldal betöltésekor a `GET /api/users/me` végpontról kérdezi le.
 
-A `GET /api/games` a `page` és a `pageSize` paramétert fogadja, egy oldalon alapértelmezetten 20, legfeljebb 100 játszma van. A válasz az oldal játszmáit, a lapozás adatait és a játszmák teljes számát tartalmazza. A végpontok hibaválaszait a 2.2.3 fejezet sorolja fel.
+A `GET /api/games` a `page` és a `pageSize` paramétert fogadja, egy oldalon alapértelmezetten 20, legfeljebb 100 játszma van. A válasz az oldal játszmáit, a lapozás adatait és a játszmák teljes számát tartalmazza.
 
 ```json
 {
@@ -703,9 +710,9 @@ A `GET /api/games` a `page` és a `pageSize` paramétert fogadja, egy oldalon al
 
 #### 2.3.3 A game-service Socket.IO-eseményei
 
-Célja, hogy a kliens és a game-service valós időben, mindkét irányban küldhessen eseményeket egy élő játszma alatt. A szerver azonnal továbbítja az ellenfél lépését, a gépi lépést és a játszma végét, a kliensnek nem kell rendszeresen lekérdeznie az állapotot. A kliens a Socket.IO 4 [38] klienst használja az alapértelmezett névtérrel, a `/ws/game` útvonalon és csak WebSocket-átvitellel. Az access tokent a böngésző a kézfogáskor a cookie-ban küldi, és a gateway ellenőrzi, ennek részleteit a 2.5 fejezet írja le.
+Célja, hogy a kliens és a game-service valós időben, mindkét irányban küldhessen eseményeket egy élő játszma alatt. A szerver azonnal továbbítja az ellenfél lépését, a gépi lépést és a játszma végét, a kliensnek nem kell rendszeresen lekérdeznie az állapotot. A kliens a Socket.IO 4 [31] klienst használja az alapértelmezett névtérrel, a `/ws/game` útvonalon és csak WebSocket-átvitellel. Az access tokent a böngésző a kézfogáskor a cookie-ban küldi, és a gateway ellenőrzi.
 
-Minden esemény egyetlen JSON-objektumot visz. A kliens minden eseményét nyugtázást kérve küldi, és a nyugta vagy sikeres, vagy egy hibakóddal együtt elutasító. 
+Minden esemény egyetlen JSON-objektumot visz. A kliens minden eseményét nyugtázást kérve küldi, és a nyugta vagy sikeres, vagy egy hibakóddal együtt elutasító.
 
 A kliens eseményei a következők.
 
@@ -726,7 +733,7 @@ A szerver eseményei a következők.
 | `moveMade` | minden elfogadott lépés után, a gépi lépéseket is beleértve | a játszma azonosítója, a lépés, az új állás FEN-ben és a sakkóra |
 | `gameEnded` | a játszma végén | a játszma azonosítója, az eredmény, a játszma végének oka és a sakkóra |
 
-Egy felhasználónak több kapcsolata is lehet, például több böngészőfülön. A szerver eseményei a felhasználó minden kapcsolatára megérkeznek, a lépést küldő kapcsolatot is beleértve, és a felhasználó bármelyik kapcsolatáról léphet. Ha egy lépés vetett véget a játszmának, a `moveMade` a `gameEnded` előtt érkezik. Egy esemény nyugtája és az általa kiváltott szerveresemény tetszőleges sorrendben érkezhet. Az újracsatlakozást a `getState` eseménnyel a 2.7 fejezet írja le.
+Egy felhasználónak több kapcsolata is lehet, például több böngészőfülön. A szerver eseményei a felhasználó minden kapcsolatára megérkeznek, a lépést küldő kapcsolatot is beleértve, és a felhasználó bármelyik kapcsolatáról léphet. Ha egy lépés vetett véget a játszmának, a `moveMade` a `gameEnded` előtt érkezik. Egy esemény nyugtája és az általa kiváltott szerveresemény tetszőleges sorrendben érkezhet.
 
 ```json
 {
@@ -755,9 +762,9 @@ Célja, hogy a game-service megkapja a gépi ellenfél lépését egy adott áll
 
 A hívás szinkron, mert a játszma a gépi lépés nélkül nem folytatódhat. A szerződés szerint a válasz 10 másodpercen belül megérkezik. Ugyanaz az állás bármikor újra lekérdezhető, így a hívó egy sikertelen kérést biztonságosan megismételhet, és a game-service ezt egyszer meg is teszi.
 
-A 400-as válasz hibás kérést vagy szabálytalan állást, a 422-es azt jelzi, hogy a soron következő félnek nincs szabályos lépése, vagy a játékváltozat nem támogatott. Ezekre ugyanaz a kérés ugyanazt a választ kapná, ezért nem érdemes megismételni őket. Az 500-as válasz a motor hibáját jelzi. Ha az ismételt kérés is sikertelen, a játszma megszakad, ahogy a 2.7 fejezet leírja.
+A 400-as válasz hibás kérést vagy szabálytalan állást, a 422-es azt jelzi, hogy a soron következő félnek nincs szabályos lépése, vagy a játékváltozat nem támogatott. Ezekre ugyanaz a kérés ugyanazt a választ kapná, ezért nem érdemes megismételni őket. Az 500-as válasz a motor hibáját jelzi. Ha az ismételt kérés is sikertelen, a játszma megszakad.
 
-Az API-nak nincs hitelesítése, és nem olvassa az identitásfejléceket. Az engine-service egy belső Docker-hálózaton van, amelyen csak a game-service éri el, a gatewaynek pedig nincs felé útvonala. 
+Az API-nak nincs hitelesítése, és nem olvassa az identitásfejléceket. Az engine-service egy belső Docker-hálózaton van, amelyen csak a game-service éri el, a gatewaynek pedig nincs felé útvonala.
 
 #### 2.3.5 A befejezett játszma eseménye
 
@@ -788,13 +795,11 @@ Az esemény egy közös borítékban utazik, amely az esemény azonosítójábó
 
 *Egy `game.finished.v1` esemény, amelyben a világos mattal nyert*
 
-A kézbesítés legalább egyszeri. A game-service az eseményt előbb egy outboxba írja, ez a transactional outbox minta [39], a platform-service pedig az esemény azonosítója alapján kiszűri az ismételt kézbesítést. A broker beállításait a 2.2.8 fejezet, az átadás és a mentés menetét a 2.6 fejezet írja le.
-
-### 2.4 Telepítési diagram **[ÚJ] - Sz.B.**
+### 2.4 Telepítési diagram
 
 Ez a fejezet a rendszer fizikai nézetét mutatja be, vagyis azt, hogy az egyes komponensek hol futnak, és hálózati szinten mit érnek el. A szolgáltatások mindenhol konténerként futnak. A diagramok nyilai csak azt mutatják, melyik konténer melyiket éri el.
 
-#### 2.4.1 Helyi futtatás (Docker Compose) Sz.B
+#### 2.4.1 Helyi futtatás (Docker Compose)
 
 A teljes rendszert az infra repó `compose.yaml` fájlja írja le egyetlen Docker Compose projektként. Minden komponens egy konténer a saját képéből. A négy alkalmazáskomponens képe a GitHub Container Registryben van, a címkéjét az `.env` fájl adja meg, a gateway és az adattárolók pedig a hivatalos képekből futnak.
 
@@ -864,7 +869,7 @@ flowchart LR
 
 A gazdagépen csak a gateway nyit portot. A `GATEWAY_PORT` változóban megadott port, alapértelmezés szerint a 8443-as, a gateway konténerére mutat, így a rendszer helyben a https://localhost:8443 címen érhető el. A 8443-as port nem ütközik egy gépen már futó webszerverrel, és a rootless Docker is meg tudja nyitni, amely az 1024 alatti portokat alapértelmezés szerint nem.
 
-A konténerek csak azokhoz a Docker-hálózatokhoz csatlakoznak, amelyekre szükségük van [24].
+A konténerek csak azokhoz a Docker-hálózatokhoz csatlakoznak, amelyekre szükségük van [32].
 
 | Hálózat | Tagjai | Belső |
 |---|---|---|
@@ -920,7 +925,7 @@ flowchart LR
 
 Elsőként az adattárolók, az engine-service és a frontend indulnak el. A platform-migrations konténer megvárja, hogy a PostgreSQL egészséges legyen, lefuttatja a hiányzó migrációkat, majd kilép. A platform-service csak ennek sikeres lefutása után indul el, a game-service pedig akkor, amikor a Redis, a RabbitMQ és az engine-service egészséges. Utoljára a gateway indul el, amikor a mögötte lévő három szolgáltatás egészséges, így már az első kérést is ki tudja szolgálni.
 
-Minden konténernek van health checkje [25], amely a konténeren belül fut.
+Minden konténernek van health checkje [33], amely a konténeren belül fut.
 
 | Konténer | Az ellenőrzés |
 |---|---|
@@ -945,68 +950,51 @@ A `.env` fájl `COMPOSE_FILE` változója adja meg, hogy a `docker compose` para
 | 127.0.0.1:6379 | Redis |
 | 127.0.0.1:8000 | engine-service |
 
-#### 2.4.2 Éles környezet (Azure) - B.B.
+#### 2.4.2 Éles környezet (Azure)
 
-A rendszer éles környezete a Microsoft Azure felhőben (*Sweden Central* régió) üzemel egyetlen dedikált `Standard_B2als_v2` Linux virtuális gépen. A kialakítás fő szempontja az **egyszerű, gyors és költséghatékony** megvalósítás volt a 100 USD-s *Azure for Students* hallgatói keretből, biztosítva a 100%-os fejlesztői és éles paritást.
+A rendszer éles környezete a Microsoft Azure felhőben (*Sweden Central* régió) üzemel egyetlen dedikált `Standard_B2als_v2` Linux virtuális gépen. A kialakítás fő szempontja az **egyszerű, gyors és költséghatékony** megvalósítás volt a 100 USD-s *Azure for Students* hallgatói keretből. Az éles környezet ugyanazt a `compose.yaml` fájlt használja, mint a helyi futtatás.
 
 Nyilvános végpont: `https://chess7ed.swedencentral.cloudapp.azure.com`
 
 ##### Telepítési topológia
 
-A telepítési diagram bemutatja az Azure felhőben kialakított erőforráscsoportot, a virtuális gép hálózati elérését és a belső konténereket:
+Az alábbi ábra a virtuális gép hálózati elérését és a rajta futó konténereket mutatja.
 
 ```mermaid
-graph TD
-    Client["Kliens (Böngésző)"]
+flowchart TD
+    client(["Böngésző"])
+    pip["Nyilvános IP-cím és DNS-név"]
+    nsg["Hálózati biztonsági csoport<br/>bejövő 443 és 22"]
 
-    subgraph AzureCloud["Azure (Sweden Central)"]
-        subgraph RG["rg-chess-platform"]
-            PIP["Nyilvános IP & DNS"]
-            NSG["NSG (Port 443, 22)"]
-
-            subgraph VM["VM (Standard_B2als_v2)"]
-                subgraph DockerEngine["Docker Compose"]
-                    Envoy["envoy"]
-
-                    subgraph EdgeNet[" "]
-                        Frontend["frontend"]
-                        PlatformService["platform-service"]
-                        GameService["game-service"]
-                    end
-
-                    EngineService["engine-service"]
-                    Postgres["postgres"]
-                    Redis["redis"]
-                    RabbitMQ["rabbitmq"]
-
-                    subgraph Volumes["Adat"]
-                        VolPG["postgres-data"]
-                        VolRedis["redis-data"]
-                        VolRMQ["rabbitmq-data"]
-                    end
-                end
-            end
-        end
+    subgraph vm["Standard_B2als_v2 virtuális gép, Docker Compose"]
+        envoy["envoy"]
+        frontend["frontend"]
+        platform["platform-service"]
+        game["game-service"]
+        engine["engine-service"]
+        postgres[("postgres")]
+        redis[("redis")]
+        rabbitmq[["rabbitmq"]]
+        volpg[("postgres-data")]
+        volredis[("redis-data")]
+        volmq[("rabbitmq-data")]
     end
 
-    Client -->|HTTPS :443| PIP
-    PIP --> NSG
-    NSG -->|TCP :443| Envoy
-    Envoy --> Frontend
-    Envoy --> PlatformService
-    Envoy --> GameService
-
-    GameService --> EngineService
-    GameService --> Redis
-    GameService --> RabbitMQ
-
-    PlatformService --> Postgres
-    RabbitMQ --> PlatformService
-
-    Postgres -.-> VolPG
-    Redis -.-> VolRedis
-    RabbitMQ -.-> VolRMQ
+    client -->|"HTTPS, 443"| pip --> nsg -->|"TCP, 443"| envoy
+    envoy --> frontend
+    envoy --> platform
+    envoy --> game
+    game --> engine
+    game --> redis
+    game --> rabbitmq
+    rabbitmq --> platform
+    platform --> postgres
+    postgres -.- volpg
+    redis -.- volredis
+    rabbitmq -.- volmq
 ```
+
+*Az éles környezet az Azure Sweden Central régiójában, az rg-chess-platform erőforráscsoportban*
 
 ##### Architekturális döntések
 
@@ -1020,7 +1008,7 @@ graph TD
 
 3. **Adattárolók és üzenetsor (Helyi konténerek):**
    - **Választás:** Konténerizált PostgreSQL, Redis és RabbitMQ helyi SSD kötetekkel (`postgres-data`, `redis-data`, `rabbitmq-data`).
-   - **Indoklás:** A menedzselt Azure PaaS adatbázisok havi 15-25 dolláros tételei napok alatt kimerítenék a keretet; a helyi konténerek zéró többletköltséggel, minimális késleltetéssel futnak.
+   - **Indoklás:** A menedzselt Azure PaaS adatbázisok havi 15-25 dolláros tételei néhány hónap alatt kimerítenék a keretet; a helyi konténerek zéró többletköltséggel, minimális késleltetéssel futnak.
 
 4. **API Gateway és Ingress:**
    - **Választás:** Envoy Proxy konténerként a 443-as porton.
@@ -1030,15 +1018,13 @@ graph TD
    - **Választás:** Statikus React bundle Nginx konténerből az Envoy mögött.
    - **Indoklás:** Azonos domain alatt fut az API-val, így elkerülhetők a külön szolgáltatások (pl. Static Web Apps) és a bonyolult cross-origin (CORS/cookie) konfigurációk.
 
-### 2.5 Hitelesítés és biztonság.
+### 2.5 Hitelesítés és biztonság
 
-> **Felelős:** platform-service (tokenek, jelszavak, validáció) + infra (Envoy: tokenellenőrzés, rate limiting) + frontend (cookie-k, frissítés, kliensoldali validáció)
+A hitelesítés célja, hogy csak bejelentkezett felhasználó érhesse el a védett API-kat és a saját élő játszmáját, miközben a böngészőben a tokenek JavaScriptből nem olvashatók. A tokeneket a platform-service állítja ki, a védett kérésekben pedig az Envoy gateway ellenőrzi őket. A platform-service és a game-service az így hitelesített felhasználó azonosítóját a gateway által beállított fejlécekből kapja. A rendszer a specifikáció Biztonság követelményét, vagyis a jelszavak biztonságos tárolását, a kliens- és szerveroldali bemenet-ellenőrzést, az SQL injection elleni védelmet és a HTTPS/WSS használatát az alábbi módon valósítja meg.
 
-A hitelesítés célja, hogy csak bejelentkezett felhasználó érhesse el a védett API-kat és a saját élő játszmáját, miközben a böngészőben a tokenek JavaScriptből nem olvashatók. A tokeneket a platform-service állítja ki, de minden klienskérés előtt az Envoy gateway ellenőrzi őket. A platform-service és a game-service az így hitelesített felhasználó azonosítóját a gateway által beállított fejlécekből kapja. A rendszer a specifikáció NF-1 biztonsági követelményét – jelszavak biztonságos tárolása, kliens- és szerveroldali bemenet-ellenőrzés, SQL injection elleni védelem, HTTPS/WSS – az alábbi módon valósítja meg.
+#### 2.5.1 Bejelentkezés és tokenek
 
-#### Bejelentkezés és tokenek
-
-Regisztrációkor vagy sikeres bejelentkezéskor a platform-service két tokent ad ki. Az access token egy ES256-tal aláírt JWT: a `sub` claim a felhasználó UUID v7 azonosítója, a `preferred_username` a felhasználóneve, az `iss` értéke `platform-service`, az `aud` értéke `chess-platform`, továbbá `iat` és `exp` időbélyeget tartalmaz. Érvényessége 15 perc. Az Envoy a saját, helyi JWKS-fájljában lévő nyilvános kulccsal ellenőrzi az aláírást, a kiállítót, a célközönséget és a lejáratot; az ellenőrzéshez nem kell a platform-service-től kulcsot kérnie.
+Regisztrációkor vagy sikeres bejelentkezéskor a platform-service két tokent ad ki. Az access token egy ES256-tal aláírt JWT: a `sub` claim a felhasználó UUID v7 azonosítója, a `preferred_username` a felhasználóneve, az `iss` értéke `platform-service`, az `aud` értéke `chess-platform`, továbbá `iat` és `exp` időbélyeget tartalmaz. Érvényessége 15 perc.
 
 A második token egy 32 kriptográfiailag véletlen bájtból képzett, átlátszatlan refresh token. Hét napig érvényes, és a platform-service csak az SHA-256 hashét tárolja PostgreSQL-ben. Frissítéskor a szolgáltatás új refresh tokent ad ki és érvényteleníti az előzőt; az új token saját hét napos érvényességet kap, így az aktív munkamenet folyamatosan meghosszabbodik. A legfeljebb 10 másodperce lecserélt tokennel érkező párhuzamos vagy ismételt frissítést a szolgáltatás még elfogadja, hogy egy elveszett válasz ne léptesse ki a felhasználót. A régebben lecserélt token ismételt használata a teljes munkamenet visszavonását eredményezi.
 
@@ -1047,70 +1033,25 @@ A második token egy 32 kriptográfiailag véletlen bájtból képzett, átláts
 | `__Host-access-token` | 15 perces access token | `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/`, `Domain` nélkül | minden kérés, a WebSocket-kézfogás is |
 | `__Secure-refresh-token` | 7 napos refresh token | `HttpOnly`, `Secure`, `SameSite=Strict` | csak `/api/auth` |
 
-A hozzáférés útvonalanként eltér:
-
-| Útvonal | Gateway-hitelesítés | Megjegyzés |
-|---|---|---|
-| `POST /api/auth/register`, `POST /api/auth/login` | nem kell access token | bejelentkezésnél IP-címenkénti rate limit érvényes |
-| `POST /api/auth/refresh`, `POST /api/auth/logout` | nem kell access token | a platform-service a refresh cookie alapján kezeli a munkamenetet |
-| többi `/api` végpont | érvényes access token kötelező | hiányzó vagy hibás tokennél a gateway 401-et ad |
-| `/ws/game` | érvényes access token kötelező a kézfogáskor | a token a cookie-ban érkezik |
-| `/ws/spectate` | access token nem kell | a jelenlegi `SpectateGateway` nem ellenőrzi a spectator-linket, csak a `gameId` alapján csatlakoztat a játékszobához; a link hitelesítése még megvalósítandó |
-
 A `HttpOnly` miatt a kliensoldali JavaScript nem tudja kiolvasni a tokeneket; a böngésző automatikusan küldi őket. A `Secure` csak HTTPS-en engedi a cookie-k küldését. A frontend a Web Locks API-val böngészőfülek között is sorosítja a frissítést. Ha egy védett REST-kérés vagy WebSocket-kapcsolat access tokenje lejárt, a kliens egyszer frissít, majd megismétli a kérést vagy újranyitja a kapcsolatot. Sikertelen frissítéskor a felhasználónak újra be kell jelentkeznie. A hibás felhasználónév és jelszó azonos 401-es hibaüzenetet ad, így a bejelentkezési válasz nem árulja el, hogy melyik adat volt hibás.
 
 Kijelentkezéskor a platform-service visszavonja a refresh tokenhez tartozó teljes munkamenetet, a válasz pedig mindkét cookie-t törli; a frontend az élő WebSocket-kapcsolatot is bezárja. A már kiadott access token nem vonható vissza azonnal: a gateway a lejáratáig, legfeljebb 15 percig elfogadhatja. A rövid élettartam korlátozza ezt az időablakot.
 
-```mermaid
-sequenceDiagram
-    participant B as Böngésző
-    participant E as Envoy gateway
-    participant P as platform-service
-    participant D as PostgreSQL
-
-    B->>E: POST /api/auth/login
-    E->>E: origin ellenőrzése, IP-címenkénti rate limit
-    E->>P: bejelentkezési kérés
-    P->>D: jelszó ellenőrzése, munkamenet és refresh hash mentése
-    P-->>B: access és refresh cookie
-    B->>E: védett kérés cookie-val
-    E->>E: JWT-aláírás, issuer, audience, lejárat ellenőrzése
-    E->>P: kérés x-user-id és x-user-name fejléccel
-    P-->>B: válasz
-    opt access token lejárt
-        B->>E: POST /api/auth/refresh refresh cookie-val
-        E->>P: kérés továbbítása
-        P->>D: refresh token rotációja
-        P-->>B: 204 és megújított cookie-k
-        B->>E: eredeti kérés ismétlése
-    end
-```
-
-*A bejelentkezés, a hitelesített kérés és a tokenfrissítés folyamata.*
-
-#### Jelszavak, jogosultságok és bemenetek
+#### 2.5.2 Jelszavak, jogosultságok és bemenetek
 
 A fiókokat az ASP.NET Core Identity kezeli. A jelszót a beépített PasswordHasher V3 formátumban tárolja: PBKDF2, HMAC-SHA512, 128 bites véletlen só és 100 000 iteráció. A jelszó soha nem kerül adatbázisba olvasható formában. A felhasználónév 3–20 angol betűből, számból, `_` vagy `-` karakterből állhat; az e-mail-cím kötelező és legfeljebb 254 karakteres. Mindkettő egyedisége kis- és nagybetűtől független. A jelszó 8–128 Unicode kódpont lehet, összetételi szabályok nélkül. Az e-mail-címet a rendszer nem ellenőrzi, mert nem küld e-mailt.
 
-A frontend az űrlapokban előzetesen ellenőrzi a regisztráció és a bejelentkezés adatait, de ez csak felhasználói segítség: a platform-service minden bemenetet a FluentValidation segítségével ismét ellenőriz. Hibás bemenetnél mezőszintű, egységes ProblemDetails-válasz érkezik. A backend nem bízik a kliens által megadott felhasználói azonosítóban: azt az Envoy által ellenőrzött JWT-ből veszi. Az Envoy a bejövő `x-user-id` és `x-user-name` fejléceket eltávolítja, és csak érvényes token claimeiből állítja be őket. A platform-service ezeket használja az aktuális felhasználó azonosítására; a felhasználóhoz kötött jogosultságokat – például, hogy egy játszma szereplője-e, illetve mely előzményeket kérdezheti le – az adott szolgáltatás ellenőrzi.
+A frontend az űrlapokban előzetesen ellenőrzi a regisztráció és a bejelentkezés adatait, de ez csak felhasználói segítség: a platform-service minden bemenetet a FluentValidation segítségével ismét ellenőriz. Hibás bemenetnél mezőszintű, egységes ProblemDetails-válasz érkezik. A backend nem bízik a kliens által megadott felhasználói azonosítóban: azt az Envoy által ellenőrzött JWT-ből veszi, amelyből a gateway az identitásfejléceket állítja be. A felhasználóhoz kötött jogosultságokat – például, hogy egy játszma szereplője-e, illetve mely előzményeket kérdezheti le – az adott szolgáltatás ellenőrzi.
 
 Az ASP.NET Core Identity és az EF Core paraméterezett SQL-lekérdezésekkel éri el az adatbázist, ezért a felhasználói bemenet nem SQL-kódként kerül végrehajtásra. A felhasználónév és az e-mail egyediségét adatbázis-egyedi indexek is védik, párhuzamos regisztráció esetén is. A szolgáltatások szerződései és a szerveroldali validátorok határozzák meg az elfogadott bemeneti formátumot; a frontend validációja nem helyettesíti ezeket.
 
-#### Hálózati és kérésbiztonság
+#### 2.5.3 Hálózati és kérésbiztonság
 
-A böngésző és a rendszer között TLS védi a HTTPS- és WSS-kapcsolatot; az Envoy zárja le a TLS-t. A gatewayen kívülről csak ez az egy belépési pont érhető el, a szolgáltatások és az adattárolók portjait az alap Compose nem teszi közzé. A konténerek egymás között a szükséges, elkülönített Docker-hálózatokon, titkosítatlan HTTP/AMQP/Redis protokollon kommunikálnak; ezek a hálózatok helyi futtatáskor nem hagyják el a gépet. A JWT-aláíró titkos kulcs csak a platform-service konténerbe van becsatolva, az Envoy kizárólag a nyilvános kulcsot kapja meg.
+A böngésző és a rendszer között TLS védi a HTTPS- és WSS-kapcsolatot. Az Envoy zárja le a TLS-t, ellenőrzi az access tokent és a kérések originjét, és korlátozza a bejelentkezési kísérleteket. Az origin-ellenőrzés a `SameSite=Strict` cookie-beállítással együtt csökkenti a CSRF-kockázatot.
 
-A cookie-alapú hitelesítés miatt a gateway origin-ellenőrzést is végez. Eltérő originű böngészőből érkező, adatot módosító `/api` kérés 403 választ kap; a gateway a `Sec-Fetch-Site` fejlécet, ennek hiányában az `Origin` fejlécet vizsgálja. A WebSocket-kézfogásnál az `Origin` egyezését ellenőrzi. Ez a `SameSite=Strict` cookie-beállítással együtt csökkenti a CSRF-kockázatot.
+### 2.6 Fő folyamatok
 
-A gateway a `POST /api/auth/login` kéréseket kliens-IP-címenkénti token bucket algoritmussal korlátozza: egy cím vödre legfeljebb 30 tokent tartalmaz, és két másodpercenként egy token töltődik vissza. A limit túllépésekor 429-es választ ad, és a kérés nem jut el a platform-service-hez. Fiókonkénti zárolás nincs, mert e-mailes fiók-helyreállítás hiányában az végleges kizárást és mások általi fiókzárolást tenne lehetővé. Ennek korlátja, hogy a több IP-címről érkező próbálkozásokat ez nem fogja össze, illetve a NAT mögötti felhasználók közös IP-limitet használnak.
-
-A helyi fejlesztői TLS-tanúsítványt és JWT-kulcsokat az infra szkriptjei állítják elő, a titkok és fejlesztői kulcsok nem kerülnek verziókezelésbe. Az Azure-telepítés még tervezési feladat: a 2.4.2-ben kell rögzíteni a Key Vault vagy a futtatókörnyezet titokkezelésének használatát, a privát hálózati elérést, a nyilvános TLS-tanúsítványt, valamint azt, hogy az Envoy marad-e a gateway. Ha más Azure-szolgáltatás váltja ki az Envoyt, a JWT-ellenőrzést, az origin-védelmet és a rate limitinget is ott kell megvalósítani.
-
-A megoldás az NF-1 követelményt a jelszavak sózott, iteratív hashelésével, a kliens- és szerveroldali validációval, az EF Core paraméterezett adatbázis-hozzáférésével és a HTTPS/WSS használatával teljesíti. A hitelesítés és az autorizáció nem azonos: a gateway igazolja a token érvényességét, az adott szolgáltatás pedig a kért művelethez tartozó üzleti jogosultságot ellenőrzi. A megfigyelői útvonal hozzáférés-ellenőrzése jelenleg hiányos, ezért az X-7 funkció nem tekinthető biztonságosan késznek. A tervezési döntéseket az ADR-3 (gateway), az ADR-4 (hitelesítés), a PS-ADR-6 (validáció), a PS-ADR-11 (fiókok), a PS-ADR-12 (tokenek és munkamenetek) és a PS-ADR-7 (adatbázis-hozzáférés) részletezi; a technológiai források a [11]–[14] és [17] hivatkozások.
-
-### 2.6 Fő folyamatok - Anna
-
-Ez a fejezet a rendszer öt fő folyamatát mutatja be szekvenciadiagramokon. Az ábrák csak a komponensek közötti üzeneteket mutatják, az interfészek tartalmát a 2.3, a tokeneket a 2.5, a játszma szabályait és állapotait a 2.7 fejezet írja le.
+Ez a fejezet a rendszer öt fő folyamatát mutatja be szekvenciadiagramokon. Az ábrák csak a komponensek közötti üzeneteket mutatják.
 
 #### 2.6.1 Bejelentkezés és hitelesített kérés
 
@@ -1138,7 +1079,7 @@ sequenceDiagram
     B->>E: POST /api/auth/refresh, refresh token cookie-ban
     E->>P: továbbítás
     P->>DB: refresh token cseréje
-    P-->>B: 200, új tokenek cookie-ban
+    P-->>B: 204, új tokenek cookie-ban
     B->>E: a kérés megismétlése
 ```
 
@@ -1181,7 +1122,7 @@ sequenceDiagram
 
 *Párosítás és élő játszma*
 
-A game-service a sorban legrégebben váró felhasználót párosítja az új jelentkezővel, és véletlenszerűen sorsolja a színeket. A Redis-műveletek atomiak, így két egyszerre érkező esemény sem hoz létre két játszmát, és egy elavult lépést sem fogad el. A lépés szabályosságáról mindig a game-service dönt. A játszma végét a 2.6.4 folyamat viszi tovább.
+A game-service a sorban legrégebben váró felhasználót párosítja az új jelentkezővel, és véletlenszerűen sorsolja a színeket. A Redis-műveletek atomiak, így két egyszerre érkező esemény sem hoz létre két játszmát, és egy elavult lépést sem fogad el. A lépés szabályosságáról mindig a game-service dönt.
 
 #### 2.6.3 Játszma a gépi ellenfél ellen
 
@@ -1246,7 +1187,7 @@ sequenceDiagram
 
 *A befejezett játszma útja a game-service-től az adatbázisig*
 
-A játszma lezárása és az esemény outboxba írása egy tranzakcióban történik, így egy lezárt játszma eseménye nem veszhet el. Az esemény csak a broker megerősítése után kerül ki az outboxból, a platform-service pedig csak a mentés után nyugtáz. Így a kézbesítés legalább egyszeri, és az ismételt kézbesítést a platform-service az esemény azonosítója alapján szűri ki.
+A játszma lezárása és az esemény outboxba írása egy tranzakcióban történik, ez a transactional outbox minta [34], ezért egy lezárt játszma eseménye nem veszhet el. Az esemény csak a broker megerősítése után kerül ki az outboxból, a platform-service pedig csak a mentés után nyugtáz. Így a kézbesítés legalább egyszeri, és az ismételt kézbesítést a platform-service az esemény azonosítója alapján szűri ki.
 
 #### 2.6.5 Játszmaelőzmények és visszajátszás
 
@@ -1273,9 +1214,7 @@ sequenceDiagram
 
 A platform-service csak a bejelentkezett felhasználó játszmáit adja vissza, egy másik felhasználó játszmájára 404-et válaszol. A lépések UCI-jelöléssel érkeznek. A frontend a chess.js-sel visszajátssza őket, így lépésenként mutatja az állást a táblán, a lépéslistát pedig algebrai jelöléssel.
 
-### 2.7 A játszma állapotai **[ÚJ] - Sipos Bence**
-
-> **Felelős:** game-service
+### 2.7 A játszma állapotai
 
 A game-service kezeli a felhasználók várakozási és aktív játszmaállapotát, valamint a játszmák teljes életciklusát. Egy felhasználó egyszerre vagy szabad, vagy a párosításra vár, vagy egy játszmában vesz részt. A várósorba lépéskor, illetve AI-ellenfél indításakor a szolgáltatás ellenőrzi ezt az állapotot; a már várakozó vagy játszó felhasználó újabb ilyen kérést nem indíthat. Ha van várakozó ellenfél, a párosítás azonnal megtörténik, és mindkét játékos `gameStarted` eseményt kap. AI elleni játék is azonnal létrejön. A játékosok színe véletlenszerű.
 
@@ -1292,35 +1231,37 @@ stateDiagram-v2
     Jatszmaban --> Jatszmaban: szabályos lépés, moveMade
     Jatszmaban --> Befejezett: matt, patt, döntetlen, feladás, időtúllépés vagy motorhiba
     Befejezett --> Szabad: gameEnded, aktív állapot törlése
-    note right of Befejezett: A game.finished.v1 esemény a lezárással együtt az outboxba kerül továbbítása aszinkron.
+    note right of Befejezett: A game.finished.v1 esemény a lezárással együtt az outboxba kerül, a továbbítása aszinkron.
 ```
+
+*Egy felhasználó állapotai a párosítástól a játszma végéig*
 
 Az aktív játszmában a game-service ellenőrzi a lépések szabályosságát és a soron következő játékost. Érvényes lépés után frissíti a pozíciót és az órát, majd `moveMade` eseményt küld a játékosok minden aktív kapcsolatának. AI ellen a game-service kéri a motor lépését; a motor válasza ugyanúgy a játszma állapotát módosító lépés. Újracsatlakozáskor a kliens a `getState` eseménnyel kérheti le, hogy várósorban van-e, illetve a folyamatban lévő játszma állapotát. A kapcsolat megszakadása önmagában nem fejezi be az aktív játszmát: a játékos visszacsatlakozhat, az órája pedig tovább fut. Ha a várakozó felhasználó utolsó kapcsolata is megszűnik, kikerül a sorból. Az aktív játszmából feladással lehet kilépni.
 
 A játszma mattal, pattal, háromszori ismétlés, az 50 lépéses szabály vagy elégtelen anyag miatt döntetlennel, feladással vagy időtúllépéssel érhet véget. Ha a sakkmotor ismételt kérése is sikertelen, a játszma `aborted` eredménnyel, `engineFailure` okkal zárul. Időtúllépéskor a soron lévő játékos veszít; kivétel, ha az ellenfélnek csak királya, vagy királya és egy futója vagy huszárja maradt, mert ekkor döntetlen az eredmény. A platform automatikusan alkalmazza a háromszori ismétlés és az 50 lépés szabályát, külön játékosi igénylés nélkül. A lezárás oka a `gameEnded` eseményben jelenik meg: `checkmate`, `stalemate`, `threefoldRepetition`, `fiftyMoveRule`, `insufficientMaterial`, `resignation`, `timeout` vagy `engineFailure`.
 
-A játszma szerveroldali sakkórája játékosonként 10 perc, lépésenkénti többletidő nélkül. A fehér órája indul el a kezdéskor, kivéve, ha a fehér a motor: ilyenkor az első motorlépés után indul a felhasználó órája. Két emberi játékos esetén minden lépés után a másik játékos órája fut. AI ellen a motor gondolkodási ideje alatt a felhasználó órája megáll, majd a motor lépésének rögzítésekor újraindul. A game-service számolja az eltelt időt, Redisben tárolja az óra állapotát és határidejét, és lejáratkor akkor is lezárja a játszmát, ha nem érkezik új kliensesemény. A lezáráskor a szolgáltatás értesíti a játékosokat `gameEnded` eseménnyel, és a `game.finished.v1` eseményt a játszma lezárásával együtt az outboxba írja; az outbox RabbitMQ-n keresztül továbbítja az eredményt a platform-service-nek, amely elmenti a játszmaelőzménybe. Az átadás részleteit a 2.6. fejezet ismerteti.
+A játszma szerveroldali sakkórája játékosonként 10 perc, lépésenkénti többletidő nélkül. A fehér órája indul el a kezdéskor, kivéve, ha a fehér a motor: ilyenkor az első motorlépés után indul a felhasználó órája. Két emberi játékos esetén minden lépés után a másik játékos órája fut. AI ellen a motor gondolkodási ideje alatt a felhasználó órája megáll, majd a motor lépésének rögzítésekor újraindul. A game-service számolja az eltelt időt, Redisben tárolja az óra állapotát és határidejét, és lejáratkor akkor is lezárja a játszmát, ha nem érkezik új kliensesemény. A lezáráskor a szolgáltatás értesíti a játékosokat `gameEnded` eseménnyel, és a `game.finished.v1` eseményt a játszma lezárásával együtt az outboxba írja; az outbox RabbitMQ-n keresztül továbbítja az eredményt a platform-service-nek, amely elmenti a játszmaelőzménybe.
 
-### 2.8 Adat- és adatbázisterv - Sz. B.
+### 2.8 Adat- és adatbázisterv
 
 Ebben a fejezetben a rendszer által tárolt adatokat és azok adatbázisra történő leképzését ismertetjük. A hosszú távon megőrzendő adatok, vagyis a felhasználói fiókok, a munkamenetek és a befejezett játszmák a platform-service PostgreSQL-adatbázisában vannak. A folyamatban lévő játszmák állapota a game-service Redis-tárolójában van. A két tároló között nincs közvetlen kapcsolat, egy játszma a befejezésekor egy üzenettel kerül át a PostgreSQL-be.
 
-#### 2.8.1 Az adatbázis entitás-relációs diagramja - Sz. B.
+#### 2.8.1 Az adatbázis entitás-relációs diagramja
 
 A platform-service az adatbázist az Entity Framework Core 10 objektum-relációs leképezőn és az Npgsql szolgáltatón keresztül éri el. A sémát a C#-osztályokból és az entitáskonfigurációkból az EF Core migrációi hozzák létre. A konténerképben a migrációk egy önállóan futtatható migrációs csomagban vannak, amelyet egy külön konténer futtat le a szolgáltatás indulása előtt.
 
 Az entitások leírása előtt érdemes áttekinteni, milyen leképzéseket használunk.
 
-- Egy **entitástípus** egy táblának felel meg, és minden példánya egy sor. Az elsődleges kulcs mindenhol UUID, amelyet nem az adatbázis, hanem az alkalmazás állít elő 7-es verziójú UUID-ként [26]. Ez egy időbélyeggel kezdődik, így időrendben növekszik, az indexben jobb a lokalitása, mint egy véletlen UUID-nak, és már a beszúrás előtt ismert. A játszmák azonosítóját a game-service állítja elő a játszma kezdetekor.
+- Egy **entitástípus** egy táblának felel meg, és minden példánya egy sor. Az elsődleges kulcs mindenhol UUID, amelyet nem az adatbázis, hanem az alkalmazás állít elő 7-es verziójú UUID-ként [35]. Ez egy időbélyeggel kezdődik, így időrendben növekszik, az indexben jobb a lokalitása, mint egy véletlen UUID-nak, és már a beszúrás előtt ismert. A játszmák azonosítóját a game-service állítja elő a játszma kezdetekor.
 - Egy **egy-több kapcsolat** az N oldalon lévő idegen kulccsal valósul meg. A munkamenet és a refresh tokenjei között a munkamenet oldalán egy gyűjtemény is van. A felhasználó és a munkamenetei között viszont csak az azonosító, mert a Domain nem ismeri az Identity felhasználótípusát. Mindkét kapcsolat kaszkádoltan töröl.
 - Egy **árnyéktulajdonság** szerepel az EF Core modelljében és az adatbázisban, de a C#-osztályban nem. Ilyen a refresh token `session_id` idegen kulcsa és a játszmát jelentő esemény `event_id` azonosítója, így ezek nem terhelik a Domain osztályait.
-- Egy **komplex típus** [27] kulcs és identitás nélküli értékobjektum, amelyet az EF Core a tulajdonos táblájának oszlopaiba képez le. Ilyen a játszma két játékosa és az időkontrollja, így egy játszma egyetlen sor marad.
+- Egy **komplex típus** [36] kulcs és identitás nélküli értékobjektum, amelyet az EF Core a tulajdonos táblájának oszlopaiba képez le. Ilyen a játszma két játékosa és az időkontrollja, így egy játszma egyetlen sor marad.
 - Egy **primitív gyűjtemény** szövegek listáját egyetlen PostgreSQL-tömboszlopba képezi le. Így tárolódnak egy játszma lépései egy `text[]` oszlopban, a lépések sorrendjében.
 - Egy **konkurenciatoken** olyan oszlop, amelynek a betöltött értékét az EF Core a módosítás feltételébe is beleírja. A refresh token `replaced_at` oszlopa ilyen, így két egyidejű frissítés közül csak az egyik tudja lecserélni ugyanazt a tokent.
 - Az **elnevezési konvenció** minden táblát és oszlopot snake_case formában nevez el, például a `StartedAt` tulajdonságból `started_at` oszlop lesz.
 - Az **időpontok** `timestamptz`, vagyis `timestamp with time zone` oszlopokba kerülnek, mindig UTC szerint.
 
-Minden use case a végén egyetlen mentéssel véglegesíti a módosításait, így azok egy tranzakcióban kerülnek az adatbázisba, vagy egyáltalán nem. Egy regisztráció például a felhasználót, az első munkamenetét és annak refresh tokenjét egyszerre menti. Az EF Core minden lekérdezést paraméterezve küld, így az adathozzáférési kódban nincs kézzel összefűzött SQL.
+Minden use case a végén egyetlen mentéssel véglegesíti a módosításait, így azok egy tranzakcióban kerülnek az adatbázisba, vagy egyáltalán nem. Egy regisztráció például a felhasználót, az első munkamenetét és annak refresh tokenjét egyszerre menti.
 
 A teljes sémát az alábbi ábra mutatja. A PK az elsődleges kulcsot, az FK az idegen kulcsot, az UK az egyedi indexet jelöli.
 
@@ -1424,9 +1365,9 @@ Az indexek és a céljuk a következők. Ezeken kívül az Identity technikai t�
 | `ix_games_white_user_id` | `games.white_user_id` | nem | a felhasználó világossal játszott játszmái |
 | `ix_games_black_user_id` | `games.black_user_id` | nem | a felhasználó sötéttel játszott játszmái |
 
-A két utolsó indexet egy migráció SQL-paranccsal hozza létre, mert az EF Core 10 egy komplex típus tulajdonságára nem tud indexet tenni. A játszmalista a `white_user_id = @user OR black_user_id = @user` feltétellel kérdez, amelyet a PostgreSQL a két index bitmapjének egyesítésével válaszol meg [28]. Egy felhasználónak kevés játszmája van ahhoz, hogy az `ended_at` szerinti rendezés a memóriában is gyors legyen.
+A két utolsó indexet egy migráció SQL-paranccsal hozza létre, mert az EF Core 10 egy komplex típus tulajdonságára nem tud indexet tenni. A játszmalista a `white_user_id = @user OR black_user_id = @user` feltétellel kérdez, amelyet a PostgreSQL a két index bitmapjének egyesítésével válaszol meg [37]. Egy felhasználónak kevés játszmája van ahhoz, hogy az `ended_at` szerinti rendezés a memóriában is gyors legyen.
 
-#### 2.8.2 Entitások Sz.B.
+#### 2.8.2 Entitások
 
 A következő alfejezetek az egyes entitásokat írják le. Az adatmodell osztálydiagramját az alábbi ábra mutatja. A `PlatformUser` osztály az Infrastructure rétegben van, a többi a Domainben. A felhasználóra a munkamenet és a játékos is csak az azonosítójával hivatkozik.
 
@@ -1633,14 +1574,9 @@ Az ASP.NET Core Identity tárolói a felhasználókon kívül három további t�
 | `user_logins` | `IdentityUserLogin<Guid>` | `login_provider` és `provider_key` | `provider_display_name`, `user_id` |
 | `user_tokens` | `IdentityUserToken<Guid>` | `user_id`, `login_provider` és `name` | `value` |
 
-#### 2.8.3 A futó játszmák adatmodellje (Redis) - B.B.
+#### 2.8.3 A futó játszmák adatmodellje (Redis)
 
 A `game-service` a folyamatban lévő játszmák, a játékosok foglaltsági állapotának, a párosítási várósornak és az outbox eseményeknek a tárolására egy dedikált Redis adatbázist használ.
-
-##### Miért nem relációs adatbázis?
-1. **Sebesség:** A memóriában történő tárolás mikroszekundumos válaszidőt nyújt, garantálva a specifikációban előírt <500 ms-os valós idejű késleltetést.
-2. **Aggregátum alapú modell:** A futó mérkőzés önálló egység; a teljes állapot egyetlen JSON struktúrában olvasható és írható JOIN műveletek nélkül.
-3. **Zárolásmentes egyidejűség (Lua):** Pesszimista SQL zárolások helyett a Redis egyszálú Lua szkriptjeivel valósítunk meg atomi Compare-And-Swap (CAS) állapotátmeneteket holtpontok (deadlock) nélkül.
 
 ##### A Redis kulcsok szerkezete és típusai
 
@@ -1697,12 +1633,12 @@ A rendszer a következő kulcsstruktúrát használja a Redisben:
 
 ##### Atomi műveletek Lua szkriptekkel
 
-A több kulcsot érintő konzisztens műveletek előre betöltött atomi Lua szkriptként (`EVALSHA`) futnak le:
+A több kulcsot érintő konzisztens műveletek atomi Lua szkriptként futnak le, amelyeket a kliens `EVALSHA` paranccsal hív meg:
 
 1. **Párosítás és várósor (`joinQueue`):**  
    Atomi módon ellenőrzi a játékos foglaltságát (`user:status`). Ha szabad és a `queue:players` listában van várakozó, azonnal párosít, generálja a `game:<gameId>` kulcsot véletlen színsorsolással, beállítja mindkét játékos státuszát, és bejegyzi a kezdő határidőt a `game:deadlines` halmazba.
 2. **Lépés rögzítése (`makeMove` – Optimista egyidejűségkezelés):**  
-   A sakklogikát a Node.js processz futtatja (`chess.js`), a Lua szkript pedig Compare-And-Swap (CAS) ellenőrzést végez: megvizsgálja a tárolt lépésszámot (`#moves == storedMoveCount`). Egyezés esetén atomi módon frissíti a JSON állapotot és a következő játékos határidejét; ütközés esetén a hívó újraolvas és legfeljebb 3-szor újrapróbálkozik.
+   A sakklogikát a Node.js processz futtatja (`chess.js`), a Lua szkript pedig Compare-And-Swap (CAS) ellenőrzést végez: megvizsgálja a tárolt lépésszámot (`#moves == storedMoveCount`). Egyezés esetén atomi módon frissíti a JSON állapotot és a következő játékos határidejét; ütközés esetén a hívó újraolvas, és összesen legfeljebb háromszor próbálkozik.
 3. **Játszma lezárása és Transactional Outbox:**  
    Parti végén (matt, feladás, időtúllépés) a szkript egyetlen tranzakcióban törli a játékállapotot, a határidőt, felszabadítja a játékosok `user:status` bejegyzését, és hozzáadja a `game.finished.v1` eseményt az `outbox:events` listához, garantálva az adatvesztésmentes outbox működést.
 
@@ -1721,7 +1657,7 @@ A `game-service`-ben a `RedisService` adathozzáférési rétege a következő k
 - `claimDeadline(gameId, color, now, until)`: Gépi lépés határidejének atomi átütemezése újrapróbálkozás idejére (másik példány általi átvételhez).
 - `peekOutboxEvent()` / `removeOutboxEvent(json)`: Outbox esemény beolvasása, illetve pontos törlése a megerősített RabbitMQ közvetítés után.
 
-### 2.9 GUI-terv - Anna
+### 2.9 GUI-terv
 
 > **Felelős:** frontend
 
@@ -1735,119 +1671,113 @@ A `game-service`-ben a `RedisService` adathozzáférési rétege a következő k
 > - `/history/:gameId` – Visszajátszás (lépésenkénti léptetés, lépéslista)
 > - Navigáció az oldalak között (ábra), átirányítási szabályok (vendég / bejelentkezett)
 
-### 2.10 Hibakezelés és hibatűrés [ÚJ] - B.B.
+### 2.10 Hibakezelés és hibatűrés
 
 Az elosztott, valós idejű működés során felmerülő hibák kezelésére az alábbi mechanizmusokat valósítottuk meg:
 
-#### 1. Klienskapcsolat megszakadása és oldal-újratöltés
+#### 2.10.1 Klienskapcsolat megszakadása és oldal-újratöltés
 - **Probléma:** Hálózati ingadozás vagy a böngésző újratöltése (F5) játék közben.
-- **Megoldás:** A `game-service` teljesen állapotmentes; újracsatlakozáskor a kliens egyetlen `getState` kéréssel lekéri a teljes játékállapotot a Redisből (aktuális FEN, lépések és a szerveridő alapján korrigált óraállás). A szerveroldali sakkóra tovább mér, így a 10 perces gondolkodási idő lejártakor a mérkőzés determinisztikusan időtúllépéssel (`timeout`) zárul (kivéve FIDE 6.9 szerinti döntetlen állás esetén).
+- **Megoldás:** A `game-service` a játszmák állapotát nem a memóriájában, hanem a Redisben tartja; újracsatlakozáskor a kliens egyetlen `getState` kéréssel lekéri a teljes játékállapotot a Redisből (aktuális FEN, lépések és a szerveridő alapján korrigált óraállás). A szerveroldali sakkóra tovább mér, így a 10 perces gondolkodási idő lejártakor a mérkőzés determinisztikusan időtúllépéssel (`timeout`) zárul.
 
-#### 2. Párhuzamos munkamenetek (több böngészőfül)
+#### 2.10.2 Párhuzamos munkamenetek (több böngészőfül)
 - **Probléma:** A felhasználó több lapon vagy eszközön lép be egyidejűleg.
-- **Megoldás:** Felhasználói szintű Socket.IO szobák (`user:<userId>`) alkalmazásával minden játék- és óraesemény szinkronban megjelenik valamennyi aktív fülön, és bármelyikről beküldött szabályos lépést elfogadja a rendszer. A várósorból (`leaveQueue`) csak az utolsó aktív kapcsolat lezárásakor kerül ki a játékos.
+- **Megoldás:** Felhasználói szintű Socket.IO szobák (`user:<userId>`) alkalmazásával minden játék- és óraesemény szinkronban megjelenik valamennyi aktív fülön, és bármelyikről beküldött szabályos lépést elfogadja a rendszer. Kapcsolatbontáskor a játékos csak akkor kerül ki a várósorból, ha az utolsó aktív kapcsolata is megszűnt.
 
-#### 3. Sakkmotor lassulása vagy hibája (AI játszma)
+#### 2.10.3 Sakkmotor lassulása vagy hibája (AI játszma)
 - **Probléma:** A Stockfish motort futtató `engine-service` nem válaszol vagy túlterhelt.
 - **Megoldás:** Szigorú, 15 másodperces időkorlát (`REQUEST_TIMEOUT_MS = 15000`) és pontosan egy automatikus újrapróbálkozás. Második hiba esetén a parti nem ragad be: a rendszer `aborted` eredménnyel és `engineFailure` indoklással lezárja a mérkőzést, és elmenti az előzményekbe. A bot válaszideje alatt a játékos órája áll.
 
-#### 4. RabbitMQ vagy platform-service elérhetetlensége parti végén
+#### 2.10.4 RabbitMQ vagy platform-service elérhetetlensége parti végén
 - **Probléma:** Befejezéskor az üzenetbróker vagy a háttéradatbázis nem elérhető.
-- **Megoldás (Transactional Outbox):** A parti lezárása és a `game.finished.v1` esemény Redisbe írása egyetlen atomi Lua szkriptben fut le, így a játékosok számára a parti azonnal lezárul. Az `OutboxPublisher` 1,5 másodpercenként továbbítja az eseményeket megerősített módban (*Publisher Confirms* + `mandatory`). A `platform-service` manuális nyugtázást (*manual ack*) használ a sikeres PostgreSQL commit után, UUID alapján kiszűri a duplikátumokat, feldolgozhatatlan üzenetnél pedig azonnal a `platform.game-finished.dlx` dead-letter exchange-re irányítja azt (20-as újrapróbálkozási limittel).
+- **Megoldás (Transactional Outbox):** A parti lezárása és a `game.finished.v1` esemény Redisbe írása egyetlen atomi Lua szkriptben fut le, így a játékosok számára a parti azonnal lezárul. Amíg a RabbitMQ nem érhető el, az esemény az outboxban marad, és az `OutboxPublisher` a kapcsolat helyreállása után elküldi. Amíg a `platform-service` nem fut, az esemény a tartós `platform.game-finished` sorban várakozik.
 
-#### 5. game-service vagy Redis újraindulása
+#### 2.10.5 game-service vagy Redis újraindulása
 - **Probléma:** Konténer-összeomlás vagy virtuális gép újraindulása.
-- **Megoldás:** Az állapotmentes `game-service` azonnal készen áll a kérések fogadására. A Redis az AOF (`appendonly yes`) perzisztencia révén a dedikált kötetről (`redis-data`) helyreállítja az összes futó játszmát, határidőt és outbox eseményt.
+- **Megoldás:** A `game-service` a memóriájában nem tárol játszmaállapotot, ezért újraindulás után azonnal folytatni tudja a játszmákat. A Redis az AOF (`appendonly yes`) perzisztencia révén a dedikált kötetről (`redis-data`) helyreállítja az összes futó játszmát, határidőt és outbox eseményt.
 
-#### 6. Lejárt access token kezelése mérkőzés alatt
+#### 2.10.6 Lejárt access token kezelése mérkőzés alatt
 - **Probléma:** A 15 perces JWT access token lejár egy elhúzódó játszma során.
 - **Megoldás:** A WebSocket kapcsolat hitelesítése a handshake fázisban történik az Envoy szintjén; a már felépült TCP kapcsolatot a token lejárata nem bontja fel. A REST kérésekhez a frontend a háttérben, a HTTP-only cookie-ban lévő refresh token segítségével észrevétlenül új tokent kér a `/api/auth/refresh` végponton.
 
-#### 7. Egységes hibakezelési formátum
+#### 2.10.7 Egységes hibakezelési formátum
 - **Probléma:** Különböző protokollok eltérő hibaválasz-struktúrái.
-- **Megoldás:** REST API hívásoknál az IETF RFC 9457 szabvány szerinti `application/problem+json` (`ProblemDetails`) formátumot használjuk; WebSocketen típusos hibakódok érkeznek (`unauthorized`, `gameNotFound`, `notYourTurn`, `illegalMove`, `alreadyInGame`, `internalError`), amelyeket a frontend egységes felugró Toast értesítésként jelenít meg.
+- **Megoldás:** REST API hívásoknál az IETF RFC 9457 szabvány szerinti `application/problem+json` (`ProblemDetails`) formátumot használjuk. WebSocketen az esemény nyugtája a szerződésben rögzített hibakódot hoz, például `alreadyInGame`, `gameNotFound`, `notYourTurn`, `illegalMove`, `invalidPayload` vagy `internalError`. Ha a kód elavult nézetet jelez, a frontend újra lekéri a játszma állapotát, egyébként hibaüzenetet jelenít meg.
 
 ---
 
-### 2.11 Skálázhatóság [ÚJ] - B.B.
+### 2.11 Skálázhatóság
 
 A mikroszolgáltatás-architektúra tervezésekor a horizontális bővíthetőség kulcsfontosságú szempont volt:
 
-#### 1. Szolgáltatások horizontális skálázhatósága
+#### 2.11.1 Szolgáltatások horizontális skálázhatósága
 - **`engine-service` (Python / Stockfish):** Teljesen állapotmentes, CPU-intenzív szolgáltatás. Tetszőleges számú párhuzamos példányban futtatható egy belső terheléselosztó mögött.
 - **`platform-service` (ASP.NET Core):** Teljesen állapotmentes REST API. Az Envoy aszimmetrikus kulcspárral érvényesíti a tokeneket, a kérések bármelyik példányra eloszthatók, az adatbázis-kapcsolatokat beépített pool kezeli.
-- **`game-service` (NestJS):** Mivel a játszmaállapot a központi Redisben található, a szolgáltatás több példányban is futtatható. Több példány esetén Socket.IO Redis Adapter gondoskodik a szerverek közötti eseményszórásról. A határidő-ellenőrzést bármelyik példány elvégezheti ütközésmentesen.
+- **`game-service` (NestJS):** Mivel a játszmaállapot a központi Redisben található, bármelyik példány kiszolgálhat bármelyik játszmát, a határidők ellenőrzését és az outbox továbbítását pedig bármelyik példány ütközésmentesen elvégezheti. Egy példány az eseményeit csak a hozzá csatlakozott klienseknek tudja elküldeni, ezért több példányhoz a Socket.IO Redis-adapterét is be kellene kötni, amely a példányok között továbbítja az eseményeket. Ez jelenleg nincs megvalósítva, így a game-service egy példányban fut.
 
-#### 2. Szűk keresztmetszetek és kezelésük
-- **Sakkmotor CPU-terhelése:** Lépésenkénti szigorú 10 másodperces időkorláttal és gépenkénti CPU-korlátokkal megelőzhető a processzor túlterhelése.
+#### 2.11.2 Szűk keresztmetszetek és kezelésük
+- **Sakkmotor CPU-terhelése:** Egy lépés számítása legfeljebb 8,5 másodpercig tart, és egy példány egyszerre csak egy lépést számol, így egy példány legfeljebb egy processzormagot foglal le.
 - **Adattárak terhelése:** A Redis egyszálú memóriamotorja >100 000 op/s áteresztőképességgel bír. A PostgreSQL adatbázist a játékmenet nem terheli: partinként mindössze egyetlen aszinkron mentés történik a legvégén.
 
-#### 3. Kapacitástervezés a követelményspecifikációhoz
-A beadott követelményspecifikációban (*Szoft Arch Sakkplatform Specifikáció (2).pdf*) megfogalmazott elvárás **legalább 1 000 regisztrált felhasználó és 100 egyidejűleg futó aktív játszma** kiszolgálását írja elő:
+#### 2.11.3 Kapacitástervezés a követelményspecifikációhoz
+A követelményspecifikáció **legalább 1 000 regisztrált felhasználó és 100 egyidejűleg futó aktív játszma** kiszolgálását írja elő. Becslésünk szerint ehhez a következő erőforrások kellenek.
 - **Memóriaigény:** 100 aktív játszma adatai a Redisben összesen kevesebb mint **1 MB** memóriát igényelnek (2–3 KB/parti).
 - **Hálózati átvitel:** 100 párhuzamos meccs átlagosan másodpercenként 30–50 lépést és kb. **100–150 kisméretű WebSocket keretet/mp** forgalmat generál, ami elhanyagolható sávszélességet igényel.
-- **Erőforrás-kihasználtság:** A rendszer a minimális 2 vCPU-s, 4 GB RAM-os `Standard_B2als_v2` virtuális gépen kényelmesen, 10–15%-os processzorterhelés mellett képes túlteljesíteni a specifikáció kapacitásbeli elvárásait ember-ember mérkőzések esetén.
+- **Erőforrás-kihasználtság:** Ember-ember mérkőzések esetén a 2 vCPU-s, 4 GB RAM-os `Standard_B2als_v2` virtuális gép bőven elegendő ehhez. Terheléses mérést nem végeztünk, ezért ez is becslés.
 
-#### 4. [AZURE] Skálázás az éles felhőkörnyezetben
-- **Automatikus skálázás:** Szükség esetén az `engine-service` konténerpodjai processzorterhelés alapján (pl. 70% CPU felett) automatikusan skálázhatók (HPA).
-- **Menedzselt szolgáltatások:** Azure Database for PostgreSQL és Azure Managed Redis esetén a legkisebb standard csomagok is több ezer egyidejű kapcsolatot támogatnak, bőséges tartalékot nyújtva.
+#### 2.11.4 Skálázás az éles felhőkörnyezetben
 
-### 2.12 Naplózás és monitorozás **[ÚJ]** -> lehetséges fejlesztéshez. 
+Ha a terhelés kinőné az egyetlen virtuális gépet, a következő lépések jöhetnek szóba.
 
-> **Felelős:** minden szolgáltatás a sajátját + infra (health checkek)
+- **Automatikus skálázás:** Egy Kubernetes-klaszteren, például az AKS-en az `engine-service` példányai processzorterhelés alapján, például 70% felett, automatikusan skálázhatók (HPA).
+- **Menedzselt szolgáltatások:** Az adattárolók menedzselt Azure-szolgáltatásokra cserélhetők, például az Azure Database for PostgreSQL-re és az Azure Managed Redisre, így a skálázásuk és a mentésük az Azure feladata lenne.
 
-> Kifejtendő: a naplózás módja szolgáltatásonként (formátum, szintek, hova ír), konfiguráció környezeti
-> változókkal, health checkek, (ha van) korrelációs azonosító a kérések követésére, monitorozási lehetőségek.
-> **[AZURE]** Az éles környezetben: a naplók gyűjtése (Azure Monitor, Log Analytics), metrikák,
-> esetleg Application Insights, riasztások, a health checkek használata a futtatókörnyezetben.
+### 2.12 A nem funkcionális követelmények teljesítése
 
-### 2.13 A nem funkcionális követelmények teljesítése - B.B.
-
-A követelményspecifikációban (*Szoft Arch Sakkplatform Specifikáció (2).pdf*) meghatározott nem funkcionális követelmények szervesen formálták a rendszer architektúráját és technológiaválasztását. Az alábbi táblázat összefoglalja a követelmények műszaki megvalósítását:
+A követelményspecifikációban meghatározott nem funkcionális követelmények szervesen formálták a rendszer architektúráját és technológiaválasztását. Az alábbi táblázat összefoglalja a követelmények műszaki megvalósítását:
 
 | Kategória | Követelmény | Specifikáció szerinti elvárás | Érintett komponensek | Építészeti megoldás és indoklás |
 |---|---|---|---|---|
-| **Funkcionalitás** | Biztonság | Jelszavak hashelt tárolása; bemenetek kliens- és szerveroldali validálása; SQL injection védelem; kizárólag titkosított HTTPS és WSS kommunikáció. | `envoy`, `platform-service`, `frontend`, `postgres` | **TLS terminálás:** Envoy szinten kizárólag a 443-as port nyitott.<br>**Jelszóbiztonság:** ASP.NET Identity PBKDF2 hashelés.<br>**SQL védelem:** EF Core paraméterezett lekérdezések.<br>**Hitelesítés:** ES256 aszimmetrikus JWT tokenek cookie-ban, Same-Origin és CSRF védelemmel. |
+| **Funkcionalitás** | Biztonság | Jelszavak hashelt tárolása; bemenetek kliens- és szerveroldali validálása; SQL injection védelem; kizárólag titkosított HTTPS és WSS kommunikáció. | `envoy`, `platform-service`, `frontend`, `postgres` | **TLS terminálás:** az Envoy zárja le a TLS-t, a rendszer kívülről csak rajta keresztül érhető el.<br>**Jelszóbiztonság:** ASP.NET Identity PBKDF2 hashelés.<br>**SQL védelem:** EF Core paraméterezett lekérdezések.<br>**Hitelesítés:** ES256 aszimmetrikus JWT tokenek cookie-ban, Same-Origin és CSRF védelemmel. |
 | **Használhatóság** | Kezelhetőség | Intuitív és átlátható felület; logikus funkcióelrendezés; lépések egyszerű végrehajthatósága. | `frontend` | **Modern SPA:** React 19 és Chakra UI komponensekkel felépített reszponzív felület.<br>**Interaktív tábla:** A szabályos lépések kiemelése a kliensoldali `chess.js` validáció alapján. |
 | **Megbízhatóság** | Adatmentés | Minden befejezett parti eredményének és lépéstörténetének automatikus mentése; felhasználónként az utolsó 100 játszma tárolása. | `game-service`, `redis`, `rabbitmq`, `platform-service`, `postgres` | **Transactional Outbox:** Atomi Redis Lua szkript záráskor.<br>**Megbízható sor:** RabbitMQ Quorum Queue és publisher confirms.<br>**Perzisztens tárolás:** PostgreSQL indexelt séma a teljes UCI lépéslistával. |
-| **Teljesítmény** | Válaszidő | Általános kérések (profil, előzmények) kiszolgálása normál terhelés mellett legfeljebb 1,5 másodpercen belül. | `envoy`, `platform-service`, `postgres` | **Aszinkron I/O:** ASP.NET Core aszinkron vezérlők és lapozott (`Take(20)`) EF Core lekérdezések.<br>**Gateway proxy:** Envoy azonnali belső továbbítása minimális overhead mellett. |
-| **Teljesítmény** | Valós idejű késleltetés | Élő játszma lépéseinek szinkronizálása WebSocketen keresztül legfeljebb 500 ms alatt. | `frontend`, `envoy`, `game-service`, `redis` | **Kizárólagos WebSocket:** Socket.IO közvetlen duplex csatorna polling nélkül.<br>**In-memory állapot:** Redis mikroszekundumos Lua CAS műveletek; hálózati round-trip tipikusan 20–80 ms. |
-| **Teljesítmény** | Skálázhatóság | Legalább 1 000 regisztrált felhasználó és 100 egyidejű aktív játszma párhuzamos kiszolgálása. | Minden komponens | **Állapotmentes backend:** A `game-service` és `platform-service` nem tart belső állapotot; a CPU-igényes `engine-service` replikálható.<br>**Alacsony terhelés:** 100 futó meccs <1 MB Redis memóriát és csupán 30–50 lépés/mp forgalmat generál. |
+| **Teljesítmény** | Válaszidő | Általános kérések (profil, előzmények) kiszolgálása normál terhelés mellett legfeljebb 1,5 másodpercen belül. | `envoy`, `platform-service`, `postgres` | **Aszinkron I/O:** ASP.NET Core aszinkron vezérlők és lapozott EF Core lekérdezések.<br>**Gateway proxy:** Envoy azonnali belső továbbítása minimális overhead mellett. |
+| **Teljesítmény** | Valós idejű késleltetés | Élő játszma lépéseinek szinkronizálása WebSocketen keresztül legfeljebb 500 ms alatt. | `frontend`, `envoy`, `game-service`, `redis` | **Kizárólagos WebSocket:** Socket.IO közvetlen duplex csatorna polling nélkül.<br>**In-memory állapot:** Redis ezredmásodperc alatti Lua CAS műveletek; hálózati round-trip tipikusan 20–80 ms. |
+| **Teljesítmény** | Skálázhatóság | Legalább 1 000 regisztrált felhasználó és 100 egyidejű aktív játszma párhuzamos kiszolgálása. | Minden komponens | **Állapotmentes backend:** A `game-service` a futó játszmákat Redisben, a `platform-service` az adatait PostgreSQL-ben tartja; a CPU-igényes `engine-service` replikálható.<br>**Alacsony terhelés:** becslésünk szerint 100 futó meccs <1 MB Redis memóriát és csupán 30–50 lépés/mp forgalmat generál. |
 | **Támogathatóság** | Platformfüggőség | Teljes funkcionalitás Google Chrome-ban; kielégítő működés Firefox és Edge alatt. | `frontend` | **Szabványos webes technológiák:** Modern ECMAScript/TypeScript, HTML5 és W3C WebSocket API használata böngészőspecifikus függőségek nélkül. |
 | **Támogathatóság** | Bővíthetőség | Új játékmódokkal (pl. Chess960) való bővíthetőség minimális kódmódosítással. | `infra/contracts`, `game-service`, `engine-service`, `frontend` | **Szerződésalapú tervezés:** Az OpenAPI és AsyncAPI sémák explicit `variant` mezőt használnak, biztosítva a visszafelé kompatibilis bővíthetőséget. |
-| **Támogathatóság** | Hordozhatóság | A kiszolgáló komponensek konténerizált (Docker) környezetben legyenek futtathatók és konfigurálhatók. | Minden komponens, `infra` | **Egységes Docker Compose:** Multi-stage Docker konténerek, amelyek módosítás nélkül futtathatók fejlesztői gépen és az éles Azure virtuális gépen is. |
+| **Támogathatóság** | Hordozhatóság | A kiszolgáló komponensek konténerizált (Docker) környezetben legyenek futtathatók és konfigurálhatók. | Minden komponens, `infra` | **Egységes Docker Compose:** Docker-konténerképek, amelyek módosítás nélkül futtathatók fejlesztői gépen és az éles Azure virtuális gépen is. |
 
-### 2.14 Tesztelés
+### 2.13 Tesztelés
 
 A projekt automatizált tesztjei a szolgáltatások saját repóiban találhatók. A gyors, külső infrastruktúrát nem igénylő unit- és komponens-tesztek a belső logikát vizsgálják; az integrációs tesztek ott használnak valódi adatbázist, Redis-példányt vagy üzenetközvetítőt, ahol ezek viselkedése a szolgáltatás működésének része. A CI minden szolgáltatásnál futtatja a hozzá tartozó automatizált ellenőrzéseket és buildet. A következő bontás a jelenlegi teszteket, majd külön jelölve a továbbfejlesztési lehetőségeket mutatja be.
 
-#### 2.14.1 Webes kliens (frontend)
+#### 2.13.1 Webes kliens (frontend)
 
 - **Unit- és komponens-tesztek:** Vitest, React Testing Library és jsdom segítségével ellenőrzik a kliensoldali logikát és a felületi komponenseket. A lefedett területek közé tartozik többek között a játékszabályok és az óra kezelése, a játékállapot és a kapcsolat állapota, a lobby-műveletek, az űrlapok szabályai, az útvonalvédelem, valamint a játék-, előzmény- és visszajátszásoldal. A böngészőben elérhető, de jsdomból hiányzó funkciókhoz a tesztkörnyezet helyettesítőket használ.
 - **API- és fake-tesztek:** a valódi HTTP-kliens, a Socket.IO-kliens és a hibakezelés külön teszteket kap. A fake Auth API, Games API és game socket tesztjei a kliens backend nélküli működését ellenőrzik. A `dev:fake` mód a böngészőben is elindítható, így a felület a szolgáltatások nélkül kipróbálható; a fake implementációk a szerződések példáihoz igazodnak.
-- **Jelenlegi korlát és továbbfejlesztés:** ezek a tesztek nem egy telepített teljes rendszert vagy valódi böngészőket automatizálnak. A frontend ADR Playwright-alapú, több böngésző-kontextust használó végponttól végpontig tartó teszteket jelöl meg későbbi lehetőségként; a Playwright jelenleg nincs beállítva.
+- **Jelenlegi korlát és továbbfejlesztés:** ezek a tesztek nem egy telepített teljes rendszert vagy valódi böngészőket automatizálnak. Későbbi lehetőség a Playwright-alapú, több böngésző-kontextust használó, végponttól végpontig tartó tesztelés; a Playwright jelenleg nincs beállítva.
 - **Kézi ellenőrzés:** a felhasználói folyamatokat a böngészőben, lehetőség szerint a fake módban és a gateway-en keresztül futó teljes rendszerrel is érdemes kipróbálni.
 
-#### 2.14.2 Platform-service
+#### 2.13.2 Platform-service
 
-- **Unit-tesztek:** xUnit v3-mal vizsgálják a domain- és alkalmazási réteg üzleti logikáját, például a regisztrációt, bejelentkezést, munkameneteket, tokeneket, felhasználói szolgáltatásokat, játszmaelózmény-feldolgozást és validátorokat. Kézzel készített fake repository-k és szolgáltatások, illetve szabályozható tesztóra segítségével a tesztek Docker nélkül futnak.
+- **Unit-tesztek:** xUnit v3-mal vizsgálják a domain- és alkalmazási réteg üzleti logikáját, például a regisztrációt, bejelentkezést, munkameneteket, tokeneket, felhasználói szolgáltatásokat, játszmaelőzmény-feldolgozást és validátorokat. Kézzel készített fake repository-k és szolgáltatások, illetve szabályozható tesztóra segítségével a tesztek Docker nélkül futnak.
 - **Integrációs tesztek:** a teljes ASP.NET Core alkalmazást memóriában indítják `WebApplicationFactory` segítségével. Ellenőrzik a HTTP-végpontokat, a hitelesítést és cookie-kat, a JSON-konvenciókat, a hibák ProblemDetails-válaszokká alakítását, az API-dokumentumot, az adatbázis-műveleteket és a RabbitMQ-fogyasztót. A PostgreSQL-t és RabbitMQ-t Testcontainers indítja valódi konténerben, az adatbázisra a migrációk is lefutnak; a RabbitMQ-tesztek izolált virtuális hosttal és jogosultságokkal dolgoznak. Ezek futtatásához Docker szükséges.
-- **Kézi ellenőrzés:** ellenőrizhető a fejlesztői Scalar API-felület, a regisztráció/bejelentkezés/kijelentkezés, a munkamenet-frissítés és a játszmaelózmények lekérése. A sikeres és hibás kéréseket, valamint a lejárt token és munkamenet eseteit is érdemes kipróbálni.
+- **Kézi ellenőrzés:** ellenőrizhető a fejlesztői Scalar API-felület, a regisztráció/bejelentkezés/kijelentkezés, a munkamenet-frissítés és a játszmaelőzmények lekérése. A sikeres és hibás kéréseket, valamint a lejárt token és munkamenet eseteit is érdemes kipróbálni.
 
-#### 2.14.3 Game-service
+#### 2.13.3 Game-service
 
 - **Unit-tesztek:** Vitesttel ellenőrzik a sakk-szabályokat, az órát, a konfigurációt, a motor-kliens viselkedését, az outbox publikálási logikáját, a játék- és Socket.IO gateway-műveleteket, valamint a hibás események nyugtázását. A külső komponensek egy részét a tesztek helyettesítik, így a szolgáltatás üzleti szabályai gyorsan vizsgálhatók.
 - **Redis-integrációs tesztek:** a RedisService tesztjei nem mockolt Redis-klienssel, hanem Testcontainers által indított valódi Redisben futnak. Ezzel az atomi Lua-szkriptek, a több kulcsot érintő állapotváltozások, a párosítás, az órák határideje és az outbox adattárolása is ellenőrizhető. Ezekhez Docker szükséges.
 - **Kézi ellenőrzés:** a frontenddel együtt kipróbálható a várólistába lépés és kilépés, két felhasználó párosítása, AI-játszma, szabálytalan és szabályos lépések, feladás, időtúllépés, újracsatlakozás, valamint az eredmény platform-service felé történő továbbítása.
 
-#### 2.14.4 Engine-service
+#### 2.13.4 Engine-service
 
 - **Unit- és API-szerződés-tesztek:** pytesttel vizsgálják az egészségügyi végpontot, a bemeneti FEN és a variáns ellenőrzését, a végállás és hibás kérés kezelését, illetve a válasz szerkezetét. A motorfolyamat újraindítását vizsgáló teszt helyettesített folyamatot használ, így a hibakezelés és a korlátok külön is tesztelhetők.
 - **Valódi motorral végzett integrációs teszt:** a `test_engine_real.py` tényleges Stockfish-példányt indít, és ellenőrzi, hogy a kezdőállásra adott ajánlott lépés legális. Ez a teszt csak akkor futtatható, ha a Stockfish elérhető, és a `STOCKFISH_PATH` be van állítva; a CI telepíti a motort.
 - **Konténeres smoke teszt:** a CI felépíti és elindítja a Docker-képet, megvárja az egészséges állapotot, majd HTTP-kéréssel ellenőrzi, hogy a motor-végpont használható és szabályos lépést ad vissza.
 - **Kézi ellenőrzés:** különféle érvényes és érvénytelen FEN-állásokkal tesztelhető a végpont, valamint a motor hibás vagy nem elérhető állapotának kezelése.
 
-#### 2.14.5 Teljes rendszer és manuális tesztelés
+#### 2.13.5 Teljes rendszer és manuális tesztelés
 
 Az `infra/scripts/smoke-test.mjs` a Docker Compose-szal elindított teljes rendszert a gateway-en keresztül vizsgálja. Többek között ellenőrzi, hogy betöltődik-e a webes kliens, működnek-e a tokenes védett útvonalak, elérhető-e a platform API, helyesek-e a WebSocket/gateway-hozzáférések, érvényesül-e a rate limit, illetve a RabbitMQ-n publikált befejezett játszma megjelenik-e a felhasználó előzményeiben. Ez rendszerintegrációs smoke teszt, nem helyettesíti a részletes unit- és integrációs teszteket.
 
@@ -1869,16 +1799,14 @@ A kézi és böngészőautomatizálási tesztek eredményét, a tesztelt verzió
 
 ## 3. Telepítési leírás
 
-> **Felelős:** lásd az alfejezeteket
-
-### 3.1 Helyi futtatás - Sz. B.
+### 3.1 Helyi futtatás
 
 A rendszer helyben Docker Compose-zal fut. A rendszerkövetelmények a következők.
 
 - Windowson és macOS-en Docker Desktop, Linuxon Docker Engine, legalább 5.7.0-s Docker Compose-zal.
 - Node.js 22.19 vagy újabb a szkriptekhez, valamint Git.
 - Szabad 8443-as port a gatewaynek, és a fejlesztői beállítások miatt szabad 5432-es, 5672-es, 6379-es, 8000-es és 15672-es port.
-- A konténerek nyugalmi állapotban együtt kb. 650 MB memóriát használnak. A Docker Desktop Windowson 8 GB [29], macOS-en legalább 4 GB memóriát ír elő [30].
+- A konténerek nyugalmi állapotban együtt kb. 650 MB memóriát használnak. A Docker Desktop Windowson 8 GB [38], macOS-en legalább 4 GB memóriát ír elő [39].
 - Kb. 2,3 GB szabad lemezterület a képeknek.
 
 A webes kliens a Google Chrome legfrissebb asztali verziójában teljes funkcionalitással, a Mozilla Firefox és a Microsoft Edge asztali változatában pedig kielégítően működik.
@@ -1954,23 +1882,22 @@ Leállítás az adatok törlésével:
 docker compose down --volumes
 ```
 
-### 3.2 Telepítés Azure-ba - B.B.
+### 3.2 Telepítés Azure-ba
 
-A rendszer éles környezete a Microsoft Azure felhőben, a *Sweden Central* régióban üzemel egyetlen dedikált virtuális gépen:
+Az éles környezet egyetlen Azure virtuális gépen fut.
 
 - **Virtuális gép specifikációja:**  
   Egy költséghatékony, burstable teljesítményű `Standard_B2als_v2` méretű Azure Linux VM (2 vCPU AMD EPYC, 4 GiB fizikai memória + 4 GiB swap terület, 30 GB SSD tárhely, Ubuntu 24.04 LTS operációs rendszer). A géphez egy nyilvános IP-cím és a `chess7ed.swedencentral.cloudapp.azure.com` DNS címke tartozik.
 
 - **Konténeres futtatókörnyezet (Docker Compose):**  
-  A virtuális gépen a lokális fejlesztői környezettel teljesen megegyezően a Docker Engine és a Docker Compose futtatja a teljes mikroszolgáltatás-architektúrát. Valamennyi komponens (a `frontend`, `platform-service`, `game-service`, `engine-service` mikroszolgáltatások, valamint a perzisztens `postgres`, `redis` és `rabbitmq` adattárak) konténerekben fut a virtuális gépen belüli szeparált belső Docker hálózatokon, biztosítva a fejlesztői és éles paritást.
+  A virtuális gépen a Docker Engine és a Docker Compose futtatja a teljes rendszert a `compose.yaml` fájlból, a GitHub Container Registryben kiadott 1.0.0-s képekkel. A konténerek ugyanazokon a különálló Docker-hálózatokon futnak, mint helyben.
 
-- **Belépési pont és API Gateway (Envoy):**  
-  A hálózati biztonsági csoportban (NSG) a külvilág felé kizárólag az adminisztrációs SSH (port 22) és a HTTPS (port 443) engedélyezett. A külső kliensforgalmat (HTTPS és WSS) egyetlen belépési pontként a 443-as porton futó Envoy API Gateway fogadja, amely elvégzi a TLS terminációt, a tokenek ellenőrzését, valamint a kérések belső útválasztását a webes felület, a REST API és a valós idejű WebSocket réteg felé.
+- **Belépési pont:**  
+  A hálózati biztonsági csoportban (NSG) a külvilág felé kizárólag az adminisztrációs SSH (port 22) és a HTTPS (port 443) engedélyezett. A 443-as porton az Envoy fogadja a HTTPS- és WSS-forgalmat, így kívülről csak a gatewayen keresztül érhető el a rendszer.
 
 ---
 
 ## 4. A program készítése során felhasznált eszközök
-
 
 - **React, React DOM, TypeScript, Vite és React Router**  \
   Felhasználás: a böngészőben futó kliens felületének és útvonalainak megvalósítása, fejlesztése és buildelése.
@@ -2017,15 +1944,15 @@ A rendszer éles környezete a Microsoft Azure felhőben, a *Sweden Central* ré
 - **Microsoft Word és Adobe Acrobat (PDF)**  \
   Felhasználás: dokumentumok szerkesztése, illetve PDF-formátumú anyagok megtekintése és kezelése.
 - **Google Chrome és Brave**  \
-  Felhasználás: a webes kliens és a helyben futó rendszer elérése, valamint a felület böngészőben történő ellenőrzése. A specifikáció Chrome-ra, Firefoxra és Edge-re vonatkozó támogatási elvárásait a 3.1. fejezet ismerteti.
+  Felhasználás: a webes kliens és a helyben futó rendszer elérése, valamint a felület böngészőben történő ellenőrzése.
 - **GitHub Copilot, Microsoft Copilot, Claude és Gemini** \
   Felhasználás: a fejlesztési és dokumentációs munka támogatása; az előállított kód és szöveg helyességét a fejlesztők ellenőrzik.
+- **Microsoft Azure** \
+  Felhasználás: az éles környezet virtuális gépének és hálózatának futtatása.
 
-  **Az Azure és a Playwright** \
-  Felhasználás:  
 ---
 
-## 5. Összefoglalás - Anna
+## 5. Összefoglalás
 
 > **Felelős:** közös
 
@@ -2034,28 +1961,21 @@ A rendszer éles környezete a Microsoft Azure felhőben, a *Sweden Central* ré
 
 ---
 
-## 6. Továbbfejlesztési lehetőségek - Anna
+## 6. Továbbfejlesztési lehetőségek
 
 - **Szűrés a játszmaelőzményekben:** ellenfélre, eredményre, játékmódra és időszakra. A `GET /api/games` ehhez új, opcionális paramétereket kapna.
-- **Élő közvetítés:** egy megosztható linken bárki nézhetné a játszmát. A `/ws/spectate` útvonal már megvan a game-service-ben és a gatewayben, a szerződése és a felülete hiányzik.
+- **Élő közvetítés:** egy megosztható linken bárki nézhetné a játszmát.
 - **Élő-pontszám [40] és ehhez igazodó párosítás:** a pontszámot egy új fogyasztó számolná a `game.finished.v1` eseményekből, a game-service módosítása nélkül.
 - **Barátok és kihívás:** keresés név alapján, barátlista a platform-service-ben, és egy barát közvetlen kihívása a game-service új Socket.IO-eseményeivel.
 - **Új játékmódok:** például Chess960. A szerződések már tartalmazzák a játékváltozatot és az időkontrollt, a szabálykönyvtárnak és a motornak kell támogatnia az új módot.
-- **Aszinkron játszmák:** napok egy lépésre, egyszerre több játszma. A játszmák tartós adatbázisba kerülnének, és a játékost pedig lehetne értesíteni a lépéséről.
+- **Aszinkron játszmák:** napok egy lépésre, egyszerre több játszma. A játszmák tartós adatbázisba kerülnének, a játékost pedig értesíteni lehetne a lépéséről.
+- **Központi naplózás és monitorozás:** a szolgáltatások a konténerek standard kimenetére naplóznak, központi naplógyűjtés és monitorozás nincs. A naplók egy helyre gyűjtése, a metrikák és a riasztások, például az Azure Monitorral, gyorsítanák a hibák felderítését.
 
 A bővítéseket segíti, hogy a szerződések kompatibilisen bővíthetők, a befejezett játszmák eseményére új fogyasztó építhető, a szolgáltatások pedig egymástól függetlenül fejleszthetők.
 
 ---
 
-## 7. Hivatkozások - közös
-
-> **Felelős:** közös (mindenki adja a saját forrásait)
-
-> Kifejtendő: számozott lista ([1], [2], …) a felhasznált technológiák honlapjaival és egyéb forrásokkal
-> (pl. Élő-pontrendszer Wikipedia, C4 modell, sakkszabályok). A szövegben `[n]` formában hivatkozunk rájuk.
-
-> Sz.B. forrásai a saját fejezeteiből, a megjelenésük sorrendjében.
-> A többi fejezet forrásaival együtt a végén újra kell számozni őket.
+## 7. Hivatkozások
 
 [1] A C4 modell honlapja\
 <https://c4model.com/>
@@ -2126,56 +2046,53 @@ A bővítéseket segíti, hogy a szerződések kompatibilisen bővíthetők, a b
 [23] Az EF Core migrációinak alkalmazása\
 <https://learn.microsoft.com/ef/core/managing-schemas/migrations/applying>
 
-[24] Hálózatok a Docker Compose-ban\
-<https://docs.docker.com/compose/how-tos/networking/>
-
-[25] A Compose fájl referenciája, a szolgáltatások beállításai\
-<https://docs.docker.com/reference/compose-file/services/>
-
-[26] RFC 9562, Universally Unique IDentifiers\
-<https://www.rfc-editor.org/rfc/rfc9562>
-
-[27] Az EF Core 8 újdonságai, értékobjektumok komplex típusokkal\
-<https://learn.microsoft.com/ef/core/what-is-new/ef-core-8.0/whatsnew#value-objects-using-complex-types>
-
-[28] PostgreSQL 18, több index kombinálása\
-<https://www.postgresql.org/docs/18/indexes-bitmap-scans.html>
-
-[29] A Docker Desktop telepítése Windowsra\
-<https://docs.docker.com/desktop/setup/install/windows-install/>
-
-[30] A Docker Desktop telepítése macOS-re\
-<https://docs.docker.com/desktop/setup/install/mac-install/>
-
-> Anna forrásai a 2.3 fejezetből. A [18] és a [26] fent már szerepel.
-
-[31] OpenAPI Specification 3.1\
+[24] OpenAPI Specification 3.1\
 <https://spec.openapis.org/oas/v3.1.1.html>
 
-[32] AsyncAPI Specification 3.1.0\
+[25] AsyncAPI Specification 3.1.0\
 <https://www.asyncapi.com/docs/reference/specification/v3.1.0>
 
-[33] A Redocly CLI\
+[26] A Redocly CLI\
 <https://github.com/Redocly/redocly-cli>
 
-[34] Martin Fowler, Tolerant Reader\
+[27] Martin Fowler, Tolerant Reader\
 <https://martinfowler.com/bliki/TolerantReader.html>
 
-[35] RFC 3339, Date and Time on the Internet\
+[28] RFC 3339, Date and Time on the Internet\
 <https://www.rfc-editor.org/rfc/rfc3339>
 
-[36] Forsyth–Edwards-jelölés, Chess Programming Wiki\
+[29] Forsyth–Edwards-jelölés, Chess Programming Wiki\
 <https://www.chessprogramming.org/Forsyth-Edwards_Notation>
 
-[37] A UCI protokoll, Chess Programming Wiki\
+[30] A UCI protokoll, Chess Programming Wiki\
 <https://www.chessprogramming.org/UCI>
 
-[38] A Socket.IO dokumentációja, események nyugtázással\
+[31] A Socket.IO dokumentációja, események nyugtázással\
 <https://socket.io/docs/v4/emitting-events/#acknowledgements>
 
-[39] microservices.io, a transactional outbox minta\
+[32] Hálózatok a Docker Compose-ban\
+<https://docs.docker.com/compose/how-tos/networking/>
+
+[33] A Compose fájl referenciája, a szolgáltatások beállításai\
+<https://docs.docker.com/reference/compose-file/services/>
+
+[34] microservices.io, a transactional outbox minta\
 <https://microservices.io/patterns/data/transactional-outbox>
+
+[35] RFC 9562, Universally Unique IDentifiers\
+<https://www.rfc-editor.org/rfc/rfc9562>
+
+[36] Az EF Core 8 újdonságai, értékobjektumok komplex típusokkal\
+<https://learn.microsoft.com/ef/core/what-is-new/ef-core-8.0/whatsnew#value-objects-using-complex-types>
+
+[37] PostgreSQL 18, több index kombinálása\
+<https://www.postgresql.org/docs/18/indexes-bitmap-scans.html>
+
+[38] A Docker Desktop telepítése Windowsra\
+<https://docs.docker.com/desktop/setup/install/windows-install/>
+
+[39] A Docker Desktop telepítése macOS-re\
+<https://docs.docker.com/desktop/setup/install/mac-install/>
 
 [40] Élő-pontrendszer, Wikipédia\
 <https://hu.wikipedia.org/wiki/Élő-pontrendszer>
-
